@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+# Allow postinstall scripts for these packages.
+# - esbuild: native binary used by Vite (web build)
+# - ffmpeg-static: downloads the FFmpeg binary used by backend audio transcoding
+# - unrs-resolver: native resolver used by ESLint tooling
+allowBuilds:
+  esbuild: true
+  ffmpeg-static: true
+  unrs-resolver: true

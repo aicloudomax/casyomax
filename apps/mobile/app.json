@@ -1,0 +1,79 @@
+{
+  "expo": {
+    "name": "Casyomax",
+    "slug": "care-sync-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.jpg",
+    "scheme": "caresyncmobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.casyomax.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Casyomax uses the microphone to allow you to talk to your health assistant and caretakers.",
+        "NSNotificationsUsageDescription": "We send notifications to remind you of your medication and health alerts.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/icon.jpg"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.casyomax.app",
+      "googleServicesFile": "./google-services.json",
+      "usesCleartextTraffic": true,
+      "versionCode": 2,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.jpg",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.jpg",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification/medicine_alert.wav"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f1fe13d4-6e81-4d4b-9211-df3f3b758f37"
+      }
+    }
+  }
+}

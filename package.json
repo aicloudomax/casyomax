@@ -1,0 +1,21 @@
+{
+  "name": "casyomax",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Casyomax — backend, mobile app, and marketing site in one workspace.",
+  "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "dev:backend": "pnpm --filter @casyomax/backend start",
+    "dev:web": "pnpm --filter @casyomax/web dev",
+    "dev:mobile": "pnpm --filter @casyomax/mobile start",
+    "build:web": "pnpm --filter @casyomax/web build"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  }
+}

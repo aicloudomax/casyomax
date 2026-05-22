@@ -1,0 +1,61 @@
+name: Build mobile (EAS)
+
+# Mobile builds run on Expo's cloud (EAS), so this workflow only triggers
+# the build. It is manual by default — you don't want a phantom EAS build
+# burning credits on every push to apps/mobile/**.
+#
+# Requires an `EXPO_TOKEN` secret on the repo:
+#   1. https://expo.dev/accounts/[account]/settings/access-tokens
+#   2. Add it as repo secret `EXPO_TOKEN`.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Target platform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'pnpm'
+
+      - name: Install workspace dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Trigger EAS build
+        run: eas build --non-interactive --no-wait --platform ${{ inputs.platform }} --profile ${{ inputs.profile }}

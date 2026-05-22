@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "635367420213",
+    "project_id": "caresync-production",
+    "storage_bucket": "caresync-production.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:635367420213:android:3bd80f829eeba379f7dc7c",
+        "android_client_info": {
+          "package_name": "com.casyomax.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtnwgYNOX6LXnfIX6JGfO1znw8yISJ4g4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
