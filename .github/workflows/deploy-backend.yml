@@ -58,12 +58,13 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          # NOTE: when you create the new monorepo GitHub repo, add a federated
-          # credential on the App Service for that repo, OR replace this block
-          # with `creds: ${{ secrets.AZURE_CREDENTIALS }}` using a publish profile.
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_73E412C7628D47C89B889EBE05AB555D }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_DDF7DB7DB87440CFB7F57FF1431B4A58 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B42C1053A34243F59693D5F337DF3C3A }}
+          # These secret names were auto-created by Azure App Service when
+          # the new repo was connected via Deployment Center — the matching
+          # federated credential on caresync-backend's Managed Identity was
+          # set up at the same time, so this works out of the box.
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0D5E93143DDB47C68DC22154574B7185 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9F8ABFEE8CD2466D81F91A46512CCF1E }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A905FB22CB50475E92C16332FF95C835 }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
