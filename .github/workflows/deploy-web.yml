@@ -6,8 +6,6 @@ on:
     paths:
       - 'apps/web/**'
       - '.github/workflows/deploy-web.yml'
-      - 'pnpm-lock.yaml'
-      - 'package.json'
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
