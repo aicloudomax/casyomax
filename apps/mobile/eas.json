@@ -23,6 +23,20 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "apple@cloudomax.com",
+        "ascAppId": "6758986276",
+        "appleTeamId": "JW69BXR7D8",
+        "ascApiKeyPath": "$ASC_API_KEY_P8",
+        "ascApiKeyId": "65GY6LJRHH",
+        "ascApiKeyIssuerId": "2ebfa20b-ba07-4cbd-9cc6-e615d8078c01"
+      },
+      "android": {
+        "serviceAccountKeyPath": "$GOOGLE_SERVICE_ACCOUNT_JSON",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }
