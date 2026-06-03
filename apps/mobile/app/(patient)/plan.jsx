@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { usePlan } from '../../hooks/usePlan';
 
 /**
@@ -52,22 +52,16 @@ export default function PlanScreen() {
                 </View>
             </View>
 
-            {/* Stripe Note */}
+            {/* Premium availability note */}
             <View style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={24} color="#4A90E2" />
                 <View style={styles.infoContent}>
-                    <Text style={styles.infoTitle}>Subscription Payments</Text>
+                    <Text style={styles.infoTitle}>Premium</Text>
                     <Text style={styles.infoText}>
-                        Premium is currently invited-only or manual via administrator. Stripe payment integration is coming in the next update!
+                        Premium features are coming soon.
                     </Text>
                 </View>
             </View>
-
-            {plan === 'free' && (
-                <TouchableOpacity style={styles.contactButton}>
-                    <Text style={styles.contactButtonText}>Request Premium Upgrade</Text>
-                </TouchableOpacity>
-            )}
 
             <View style={{ height: 40 }} />
         </ScrollView>
@@ -165,17 +159,5 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#2C5282',
         lineHeight: 18,
-    },
-    contactButton: {
-        marginHorizontal: 20,
-        backgroundColor: '#4A90E2',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    contactButtonText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 16,
     }
 });
