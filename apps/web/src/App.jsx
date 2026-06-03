@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import DeleteAccount from './pages/DeleteAccount';
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/delete-account" element={<DeleteAccount />} />
           </Routes>
         </div>
 
@@ -20,6 +22,7 @@ function App() {
             <p className="mb-2">&copy; {new Date().getFullYear()} Casyomax. All rights reserved.</p>
             <div className="space-x-4">
               <a href="/privacy-policy" className="hover:text-primary transition-colors">Privacy Policy</a>
+              <a href="/delete-account" className="hover:text-primary transition-colors">Delete Account</a>
             </div>
           </div>
         </footer>
