@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "test": "turbo run test",
     "dev:backend": "pnpm --filter @casyomax/backend start",
     "dev:web": "pnpm --filter @casyomax/web dev",
     "dev:mobile": "pnpm --filter @casyomax/mobile start",

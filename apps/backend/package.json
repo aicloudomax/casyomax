@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "echo \"No test specified\" && exit 0"
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "laxmi koushik",
@@ -35,5 +36,8 @@
     "node-cron": "^4.2.1",
     "pg": "^8.16.3",
     "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }
