@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Easing, FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 

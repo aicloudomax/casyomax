@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import ApiHelper from './ApiHelper';
 
 export const login = async (token, user) => {

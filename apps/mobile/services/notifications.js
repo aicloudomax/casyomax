@@ -7,6 +7,14 @@ import ApiHelper from './ApiHelper';
 export async function registerForPushNotificationsAsync() {
     let token;
 
+    // Web push requires a service worker + VAPID setup that this app doesn't
+    // have. Without the guard, getPermissionsAsync/requestPermissionsAsync
+    // hangs in the browser, which would block the post-login redirect.
+    if (Platform.OS === 'web') {
+        console.log("Push notifications are not supported on web — skipping registration.");
+        return null;
+    }
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     console.log("Permission:", existingStatus);
     let finalStatus = existingStatus;

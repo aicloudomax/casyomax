@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import Toast from 'react-native-toast-message';
 import { API_BASE_URL } from '../constants/ApiConstants';
 import { logoutUser } from './AuthService';

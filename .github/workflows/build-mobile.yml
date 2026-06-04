@@ -47,7 +47,7 @@ on:
 jobs:
   build-and-submit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -80,21 +80,26 @@ jobs:
             echo "submit=true"         >> "$GITHUB_OUTPUT"
           fi
 
-      - name: EAS Build
+      # On the free Expo plan, builds run serially in a queue: iOS starts
+      # quickly but Android can sit ~1h before it even begins. Using --wait
+      # here makes the runner idle through the whole queue and hit the job
+      # timeout (the "operation was canceled" failure), and the submit step
+      # never runs. Instead we --no-wait (queue the builds and exit in
+      # seconds) and let EAS build AND submit each platform on its own
+      # servers via --auto-submit, independent of this runner.
+      #
+      # Trade-off: this job goes green once the builds are QUEUED, not when
+      # they finish. Monitor build/submit status on https://expo.dev.
+      - name: EAS Build (+ auto-submit on production)
         working-directory: apps/mobile
         run: |
+          EXTRA=""
+          if [ "${{ steps.params.outputs.submit }}" = "true" ] && [ "${{ steps.params.outputs.profile }}" = "production" ]; then
+            EXTRA="--auto-submit"
+          fi
           eas build \
             --non-interactive \
-            --wait \
-            --platform ${{ steps.params.outputs.platform }} \
-            --profile ${{ steps.params.outputs.profile }}
-
-      - name: EAS Submit
-        if: steps.params.outputs.submit == 'true' && steps.params.outputs.profile == 'production'
-        working-directory: apps/mobile
-        run: |
-          eas submit \
-            --non-interactive \
-            --latest \
+            --no-wait \
+            $EXTRA \
             --platform ${{ steps.params.outputs.platform }} \
             --profile ${{ steps.params.outputs.profile }}

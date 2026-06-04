@@ -1,5 +1,5 @@
 import { Redirect, useRouter } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { ROLES } from '../constants/ApiConstants';

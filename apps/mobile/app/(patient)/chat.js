@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,

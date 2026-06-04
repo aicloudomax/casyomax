@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import { API_BASE_URL, ENDPOINTS } from '../constants/ApiConstants';
 
 const AzureService = {

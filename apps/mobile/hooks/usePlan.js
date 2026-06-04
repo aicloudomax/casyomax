@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from '@/services/SecureStore';
 import { useCallback, useEffect, useState } from 'react';
 import ApiHelper from '../services/ApiHelper';
 
