@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Easing, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import Markdown from 'react-native-markdown-display';
 import Toast from 'react-native-toast-message';
@@ -20,6 +20,17 @@ import AzureService from '../../services/AzureService';
 import { registerForPushNotificationsAsync, registerTokenWithBackend } from '../../services/notifications';
 
 
+
+// Apple Guideline 1.4.1 — citations for medical/health information.
+// These authoritative sources back the general health information the assistant provides.
+const MEDICAL_SOURCES = [
+    { name: 'MedlinePlus – U.S. National Library of Medicine', url: 'https://medlineplus.gov/' },
+    { name: 'NHS – Health A to Z', url: 'https://www.nhs.uk/conditions/' },
+    { name: 'Mayo Clinic – Diseases & Conditions', url: 'https://www.mayoclinic.org/diseases-conditions' },
+    { name: 'World Health Organization (WHO)', url: 'https://www.who.int/health-topics' },
+    { name: 'Centers for Disease Control and Prevention (CDC)', url: 'https://www.cdc.gov/' },
+    { name: 'U.S. Food and Drug Administration (FDA) – Drugs', url: 'https://www.fda.gov/drugs' },
+];
 
 const PatientHomeScreen = () => {
     const router = useRouter();
@@ -39,6 +50,7 @@ const PatientHomeScreen = () => {
 
     const [isProcessing, setIsProcessing] = useState(false);
     const [loadingText, setLoadingText] = useState('Thinking...');
+    const [sourcesVisible, setSourcesVisible] = useState(false);
     const notificationListener = useRef();
     const responseListener = useRef();
     const { plan, getRemainingUsage, isFeatureLocked, refreshPlan } = usePlan();
@@ -755,6 +767,11 @@ const PatientHomeScreen = () => {
                 marginTop: 0,
                 marginBottom: 0,
             },
+            // Citation links (Apple Guideline 1.4.1) — visibly tappable.
+            link: {
+                color: '#0066CC',
+                textDecorationLine: 'underline',
+            },
         };
 
         return (
@@ -764,7 +781,10 @@ const PatientHomeScreen = () => {
                         {item.text}
                     </Text>
                 ) : (
-                    <Markdown style={markdownStyles}>
+                    <Markdown
+                        style={markdownStyles}
+                        onLinkPress={(url) => { Linking.openURL(url).catch(() => {}); return false; }}
+                    >
                         {item.text}
                     </Markdown>
                 )}
@@ -841,6 +861,18 @@ const PatientHomeScreen = () => {
                 remaining={getRemainingUsage('ai_chat')}
                 plan={plan}
             />
+
+            {/* Apple Guideline 1.4.1 — always-visible disclaimer + easy access to medical sources */}
+            <View style={styles.disclaimerBar}>
+                <Ionicons name="information-circle-outline" size={16} color="#5A6473" />
+                <Text style={styles.disclaimerText}>
+                    General health information, not medical advice. Always consult a healthcare professional.
+                </Text>
+                <TouchableOpacity onPress={() => setSourcesVisible(true)} style={styles.sourcesButton}>
+                    <Text style={styles.sourcesButtonText}>Sources</Text>
+                </TouchableOpacity>
+            </View>
+
             <FlatList
 
                 data={messages}
@@ -851,6 +883,44 @@ const PatientHomeScreen = () => {
             />
             {renderInput()}
             {isVoiceMode && renderRecordingOverlay()}
+
+            {/* Medical sources / citations sheet */}
+            <Modal visible={sourcesVisible} transparent animationType="slide" onRequestClose={() => setSourcesVisible(false)}>
+                <View style={styles.sourcesOverlay}>
+                    <View style={styles.sourcesSheet}>
+                        <View style={styles.sourcesHeader}>
+                            <Text style={styles.sourcesTitle}>Medical Information Sources</Text>
+                            <TouchableOpacity onPress={() => setSourcesVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+                        <Text style={styles.sourcesIntro}>
+                            Casyomax provides general health information only and is not a substitute for
+                            professional medical advice, diagnosis, or treatment. Health and medication
+                            information shown in chat is drawn from the trusted public health authorities
+                            below. Tap any source to read more.
+                        </Text>
+                        <ScrollView style={{ marginTop: 8 }}>
+                            {MEDICAL_SOURCES.map((src) => (
+                                <TouchableOpacity
+                                    key={src.url}
+                                    style={styles.sourceRow}
+                                    onPress={() => Linking.openURL(src.url).catch(() => {})}
+                                >
+                                    <Ionicons name="open-outline" size={18} color="#0066CC" />
+                                    <View style={{ flex: 1, marginLeft: 10 }}>
+                                        <Text style={styles.sourceName}>{src.name}</Text>
+                                        <Text style={styles.sourceUrl}>{src.url}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        <Text style={styles.sourcesFooter}>
+                            In an emergency, call your local emergency number immediately.
+                        </Text>
+                    </View>
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 };
@@ -863,6 +933,85 @@ const styles = StyleSheet.create({
     messagesList: {
         padding: 16,
         paddingBottom: 32,
+    },
+    disclaimerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EEF2F7',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#DCE3EC',
+    },
+    disclaimerText: {
+        flex: 1,
+        fontSize: 11,
+        lineHeight: 15,
+        color: '#5A6473',
+        marginLeft: 6,
+    },
+    sourcesButton: {
+        marginLeft: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        backgroundColor: '#0066CC',
+        borderRadius: 12,
+    },
+    sourcesButtonText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    sourcesOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'flex-end',
+    },
+    sourcesSheet: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        maxHeight: '80%',
+    },
+    sourcesHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    sourcesTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#1A1A1A',
+    },
+    sourcesIntro: {
+        fontSize: 13,
+        lineHeight: 19,
+        color: '#5A6473',
+    },
+    sourceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EEE',
+    },
+    sourceName: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#1A1A1A',
+    },
+    sourceUrl: {
+        fontSize: 12,
+        color: '#0066CC',
+        marginTop: 2,
+    },
+    sourcesFooter: {
+        fontSize: 12,
+        color: '#9098A3',
+        marginTop: 14,
+        textAlign: 'center',
     },
     systemMessageContainer: {
         marginBottom: 16,
