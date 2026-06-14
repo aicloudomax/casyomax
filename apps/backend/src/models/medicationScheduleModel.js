@@ -81,7 +81,23 @@ exports.updateSchedule = async ({
 };
 
 exports.deleteSchedule = async (id) => {
-    return pool.query("UPDATE medication_schedules SET is_active = false WHERE id=$1", [id]);
+    // Permanently delete the schedule along with its dose logs (logs -> schedule).
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        await client.query("DELETE FROM medication_logs WHERE schedule_id = $1", [id]);
+        const result = await client.query(
+            "DELETE FROM medication_schedules WHERE id = $1 RETURNING *",
+            [id]
+        );
+        await client.query("COMMIT");
+        return result.rows[0];
+    } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    } finally {
+        client.release();
+    }
 };
 
 exports.getSchedulesByMedication = async (id) => {

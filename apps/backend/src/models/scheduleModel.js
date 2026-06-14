@@ -10,7 +10,11 @@ exports.getDueSchedules = async () => {
     JOIN patients p ON m.patient_id = p.id
     JOIN users u ON p.user_id = u.id
     WHERE ms.is_active = true
-      AND ms.scheduled_time_utc <= NOW() AT TIME ZONE 'UTC'
+      AND m.is_active = true
+      AND (
+        ms.scheduled_time_utc <= NOW() AT TIME ZONE 'UTC'
+        OR ms.scheduled_time_utc IS NULL
+      )
   `;
   const { rows } = await pool.query(query);
   return rows;
@@ -64,12 +68,20 @@ exports.createMedicationLog = async ({
 // Get pending logs that are older than a certain time (for escalation)
 exports.getPendingLogs = async (olderThanTime) => {
   const query = `
-    SELECT ml.*, u.first_name as patient_name, m.medicine_name, c.id as caretaker_id, c.expo_push_token as caretaker_token
+    SELECT
+      ml.*,
+      u.first_name as patient_name,
+      m.medicine_name,
+      COALESCE(c.id, creator.id) as caregiver_id,
+      COALESCE(c.expo_push_token, creator.expo_push_token) as caregiver_token
     FROM medication_logs ml
     JOIN users u ON ml.patient_id = u.id
+    JOIN patients p ON p.user_id = u.id
     JOIN medication_schedules ms ON ml.schedule_id = ms.id
     JOIN medications m ON ms.medication_id = m.id
-    LEFT JOIN users c ON m.created_by = c.id
+    LEFT JOIN caregiver_assignments ca ON ca.patient_id = p.id AND ca.is_active = true
+    LEFT JOIN users c ON ca.caregiver_id = c.id
+    LEFT JOIN users creator ON m.created_by = creator.id
     WHERE ml.status = 'pending'
       AND ml.scheduled_at <= $1
       AND ml.created_at <= $1
@@ -94,7 +106,7 @@ exports.getSnoozedLogs = async (olderThanTime) => {
 };
 
 // Update the status of a log
-exports.updateLogStatus = async (logId, status, { responded_at, response_method, confirmed_by, notes } = {}) => {
+exports.updateLogStatus = async (logId, status, { responded_at, response_method, confirmed_by, notes, reminder_sent_at } = {}) => {
   const query = `
     UPDATE medication_logs
     SET status = $1, 
@@ -102,11 +114,12 @@ exports.updateLogStatus = async (logId, status, { responded_at, response_method,
         responded_at = COALESCE($3, responded_at),
         response_method = COALESCE($4, response_method),
         confirmed_by = COALESCE($5, confirmed_by),
-        notes = COALESCE($6, notes)
+        notes = COALESCE($6, notes),
+        reminder_sent_at = COALESCE($7, reminder_sent_at)
     WHERE id = $2
     RETURNING *
   `;
-  const { rows } = await pool.query(query, [status, logId, responded_at, response_method, confirmed_by, notes]);
+  const { rows } = await pool.query(query, [status, logId, responded_at, response_method, confirmed_by, notes, reminder_sent_at]);
   return rows[0];
 };
 

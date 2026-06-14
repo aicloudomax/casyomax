@@ -33,9 +33,9 @@ exports.sendMedicationNotification = async (patientId, medicationName, scheduleI
     }
 };
 
-exports.sendCaretakerAlert = async (caretakerId, patientName, medicationName, token) => {
+const sendCaregiverAlert = async (caregiverId, patientName, medicationName, token) => {
     if (!token) {
-        console.log(`No token for caretaker ${caretakerId}`);
+        console.log(`No token for caregiver ${caregiverId}`);
         return;
     }
 
@@ -44,8 +44,11 @@ exports.sendCaretakerAlert = async (caretakerId, patientName, medicationName, to
 
     try {
         await expoService.sendPush(token, title, body, { type: "alert" });
-        console.log(`Alert sent to caretaker ${caretakerId}`);
+        console.log(`Alert sent to caregiver ${caregiverId}`);
     } catch (error) {
         console.error("Error sending alert:", error);
     }
 };
+
+exports.sendCaregiverAlert = sendCaregiverAlert;
+exports.sendCaretakerAlert = sendCaregiverAlert;

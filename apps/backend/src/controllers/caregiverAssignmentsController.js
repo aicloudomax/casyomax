@@ -3,8 +3,8 @@ const patientModel = require("../models/patientModel");
 
 exports.getPatientsForCaretaker = async (req, res) => {
     try {
-        const { caretakerId } = req.params;
-        const result = await caregiverAssignmentsModel.getPatientsByCaretaker(caretakerId);
+        const caregiverId = req.params.caregiverId || req.params.caretakerId;
+        const result = await caregiverAssignmentsModel.getPatientsByCaretaker(caregiverId);
         res.status(200).json({ success: true, patients: result.rows });
     } catch (error) {
         console.error("Error fetching assigned patients:", error);
@@ -14,7 +14,12 @@ exports.getPatientsForCaretaker = async (req, res) => {
 
 exports.assignCaretaker = async (req, res) => {
     try {
-        const { patientId: userId, caretakerId, assignedBy } = req.body;
+        const { patientId: userId, assignedBy } = req.body;
+        const caregiverId = req.body.caregiverId || req.body.caretakerId;
+
+        if (!userId || !caregiverId) {
+            return res.status(400).json({ success: false, message: "patientId and caregiverId are required" });
+        }
 
         let patientId = await caregiverAssignmentsModel.getPatientIdByUserId(userId);
 
@@ -33,10 +38,10 @@ exports.assignCaretaker = async (req, res) => {
             return res.status(404).json({ success: false, message: "Patient record not found for this user" });
         }
 
-        const result = await caregiverAssignmentsModel.assignCaretakerToPatient(patientId, caretakerId, assignedBy);
-        res.status(200).json({ success: true, message: "Caretaker assigned successfully", assignment: result });
+        const result = await caregiverAssignmentsModel.assignCaretakerToPatient(patientId, caregiverId, assignedBy);
+        res.status(200).json({ success: true, message: "Caregiver assigned successfully", assignment: result });
     } catch (error) {
-        console.error("Error assigning caretaker:", error);
+        console.error("Error assigning caregiver:", error);
         res.status(500).json({
             success: false,
             message: "Server error",
@@ -48,14 +53,20 @@ exports.assignCaretaker = async (req, res) => {
 
 exports.removeAssignment = async (req, res) => {
     try {
-        const { patientId: userId, caretakerId } = req.body;
+        const { patientId: userId } = req.body;
+        const caregiverId = req.body.caregiverId || req.body.caretakerId;
+
+        if (!userId || !caregiverId) {
+            return res.status(400).json({ success: false, message: "patientId and caregiverId are required" });
+        }
+
         const patientId = await caregiverAssignmentsModel.getPatientIdByUserId(userId);
 
         if (!patientId) {
             return res.status(404).json({ success: false, message: "Patient record not found. Cannot remove assignment." });
         }
 
-        await caregiverAssignmentsModel.removeCaretakerFromPatient(patientId, caretakerId);
+        await caregiverAssignmentsModel.removeCaretakerFromPatient(patientId, caregiverId);
         res.status(200).json({ success: true, message: "Assignment removed successfully" });
     } catch (error) {
         console.error("Error removing assignment:", error);
@@ -74,13 +85,13 @@ exports.getAssignedCaretakers = async (req, res) => {
         const patientId = await caregiverAssignmentsModel.getPatientIdByUserId(userId);
 
         if (!patientId) {
-            return res.status(200).json({ success: true, caretakers: [] });
+            return res.status(200).json({ success: true, caregivers: [], caretakers: [] });
         }
 
-        const caretakers = await caregiverAssignmentsModel.getCaretakersForPatient(patientId);
-        res.status(200).json({ success: true, caretakers });
+        const caregivers = await caregiverAssignmentsModel.getCaretakersForPatient(patientId);
+        res.status(200).json({ success: true, caregivers, caretakers: caregivers });
     } catch (error) {
-        console.error("Error fetching caretakers:", error);
+        console.error("Error fetching caregivers:", error);
         res.status(500).json({ success: false, message: "Server error" });
     }
 };

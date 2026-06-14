@@ -1,18 +1,28 @@
 /**
  * FILE: src/services/azureAIService.js
  * -----------------------------------------------------------------------------
- * PURPOSE: Wrapper for Azure OpenAI and Speech Services.
- * UPDATED: Added Tool Calling (Weather + News).
+ * PURPOSE: Wrapper for chat AI providers and Azure Speech Services.
+ * UPDATED: Added Ollama support for local LLM testing.
  * -----------------------------------------------------------------------------
  */
 const { OpenAIClient, AzureKeyCredential } = require("@azure/openai");
 const sdk = require("microsoft-cognitiveservices-speech-sdk");
 const axios = require('axios'); // Required for external API calls
 
+const normalizeOllamaBaseUrl = (baseUrl) => baseUrl
+    .replace(/\/(?:api|v1)\/?$/, "")
+    .replace(/\/+$/, "");
+
 // Load Environment Variables
+const AI_PROVIDER = (process.env.AI_PROVIDER || "azure").toLowerCase();
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
 const AZURE_OPENAI_KEY = process.env.AZURE_OPENAI_KEY;
-const AZURE_DEPLOYMENT_ID = "gpt-4o-care-sync";
+const AZURE_DEPLOYMENT_ID = process.env.AZURE_OPENAI_DEPLOYMENT_ID || "gpt-4o-care-sync";
+const OLLAMA_BASE_URL = normalizeOllamaBaseUrl(process.env.OLLAMA_BASE_URL || "http://localhost:11434");
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
+const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 120000);
+const OLLAMA_ENABLE_TOOLS = process.env.OLLAMA_ENABLE_TOOLS !== "false";
+const OLLAMA_TOOL_MODE = (process.env.OLLAMA_TOOL_MODE || "auto").toLowerCase();
 const AZURE_SPEECH_KEY = process.env.AZURE_SPEECH_KEY;
 const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION;
 
@@ -20,11 +30,133 @@ const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION;
 const AZURE_MAPS_KEY = process.env.AZURE_MAPS_KEY;
 const BING_SEARCH_KEY = process.env.BING_SEARCH_KEY;
 
-// Initialize OpenAI Client
-const openAIClient = new OpenAIClient(
-    AZURE_OPENAI_ENDPOINT,
-    new AzureKeyCredential(AZURE_OPENAI_KEY)
-);
+let openAIClient = null;
+
+const getOpenAIClient = () => {
+    if (openAIClient) return openAIClient;
+
+    if (!AZURE_OPENAI_ENDPOINT || !AZURE_OPENAI_KEY) {
+        throw new Error("Azure OpenAI is not configured. Set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_KEY, or use AI_PROVIDER=ollama.");
+    }
+
+    openAIClient = new OpenAIClient(
+        AZURE_OPENAI_ENDPOINT,
+        new AzureKeyCredential(AZURE_OPENAI_KEY)
+    );
+
+    return openAIClient;
+};
+
+const stringifyToolArguments = (args) => {
+    if (typeof args === "string") return args;
+    return JSON.stringify(args || {});
+};
+
+const parseToolArguments = (args) => {
+    if (!args) return {};
+    if (typeof args === "object") return args;
+    return JSON.parse(args);
+};
+
+const normalizeToolCall = (toolCall, index = 0) => ({
+    id: toolCall.id || `tool-call-${Date.now()}-${index}`,
+    type: toolCall.type || "function",
+    function: {
+        name: toolCall.function?.name,
+        arguments: stringifyToolArguments(toolCall.function?.arguments)
+    }
+});
+
+const toOpenAICompatibleMessages = (messages) => messages.map((message) => {
+    const next = {
+        role: message.role,
+        content: message.content ?? null
+    };
+
+    if (message.toolCalls) {
+        next.tool_calls = message.toolCalls.map((toolCall, index) => {
+            const normalized = normalizeToolCall(toolCall, index);
+
+            return {
+                id: normalized.id,
+                type: normalized.type,
+                function: {
+                    name: normalized.function.name,
+                    arguments: normalized.function.arguments
+                }
+            };
+        });
+    }
+
+    if (message.toolCallId) {
+        next.tool_call_id = message.toolCallId;
+    }
+
+    return next;
+});
+
+const normalizeOpenAICompatibleResult = (result) => ({
+    choices: (result.choices || []).map((choice) => ({
+        finishReason: choice.finishReason || choice.finish_reason,
+        message: {
+            content: choice.message?.content || "",
+            toolCalls: (choice.message?.toolCalls || choice.message?.tool_calls || []).map(normalizeToolCall)
+        }
+    }))
+});
+
+const getLastUserMessageText = (messages) => {
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+    return typeof lastUserMessage?.content === "string" ? lastUserMessage.content.toLowerCase() : "";
+};
+
+const shouldSendToolsToOllama = (messages, tools) => {
+    if (!OLLAMA_ENABLE_TOOLS || !tools?.length) return false;
+    if (OLLAMA_TOOL_MODE === "always") return true;
+    if (OLLAMA_TOOL_MODE === "never") return false;
+
+    const text = getLastUserMessageText(messages);
+    return /\b(weather|forecast|temperature|news|headline|email|mail|contact|schedule|scheduled|sms|message|remind|reminder)\b/.test(text);
+};
+
+const callOllamaChatCompletions = async (messages, options = {}) => {
+    const tools = shouldSendToolsToOllama(messages, options.tools) ? options.tools : undefined;
+
+    const response = await axios.post(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+        model: OLLAMA_MODEL,
+        messages: toOpenAICompatibleMessages(messages),
+        temperature: options.temperature,
+        max_tokens: options.maxTokens,
+        tools: tools || undefined,
+        tool_choice: tools ? options.toolChoice : undefined,
+        stream: false
+    }, {
+        timeout: OLLAMA_TIMEOUT_MS
+    });
+
+    return normalizeOpenAICompatibleResult(response.data);
+};
+
+const callChatCompletions = async (messages, options = {}) => {
+    if (AI_PROVIDER === "ollama") {
+        return callOllamaChatCompletions(messages, options);
+    }
+
+    if (AI_PROVIDER !== "azure") {
+        throw new Error(`Unsupported AI_PROVIDER "${AI_PROVIDER}". Use "azure" or "ollama".`);
+    }
+
+    return getOpenAIClient().getChatCompletions(
+        AZURE_DEPLOYMENT_ID,
+        messages,
+        {
+            temperature: options.temperature,
+            maxTokens: options.maxTokens,
+            tools: options.tools,
+            toolChoice: options.toolChoice
+        }
+    );
+};
 
 /**
  * FEATURE: Weather Service (Azure Maps)
@@ -110,7 +242,7 @@ const getNews = async (query) => {
  */
 const executeTool = async (toolCall) => {
     const fnName = toolCall.function.name;
-    const args = JSON.parse(toolCall.function.arguments);
+    const args = parseToolArguments(toolCall.function.arguments);
 
     console.log(`🛠️ Executing Tool: ${fnName} with args:`, args);
 
@@ -123,7 +255,7 @@ const executeTool = async (toolCall) => {
 };
 
 /**
- * Generates a chat response using Azure OpenAI (Multi-Turn with Tools).
+ * Generates a chat response using the configured AI provider (Multi-Turn with Tools).
  * @param {Array} messages - List of messages
  * @param {Array} tools - Tool definitions (optional)
  * @param {Function} toolExecutor - Optional callback to execute tools. Signature: (toolCall) => Promise<string>
@@ -132,22 +264,18 @@ const executeTool = async (toolCall) => {
 exports.generateChatResponse = async (messages, tools = null, customToolExecutor = null) => {
     try {
         // 1. First Call to LLM
-        const result = await openAIClient.getChatCompletions(
-            AZURE_DEPLOYMENT_ID,
-            messages,
-            {
-                temperature: 0.7,
-                maxTokens: 800,
-                tools: tools, // Pass tools if defined
-                toolChoice: tools ? "auto" : undefined
-            }
-        );
+        const result = await callChatCompletions(messages, {
+            temperature: 0.7,
+            maxTokens: 800,
+            tools: tools,
+            toolChoice: tools ? "auto" : undefined
+        });
 
         const choice = result.choices[0];
         const message = choice.message;
 
         // 2. Check if LLM wants to use a Tool
-        if (choice.finishReason === "tool_calls" && message.toolCalls) {
+        if (choice.finishReason === "tool_calls" && message.toolCalls?.length) {
             // Append assistant's "thinking" (tool call request) to history
             messages.push({
                 role: "assistant",
@@ -178,11 +306,10 @@ exports.generateChatResponse = async (messages, tools = null, customToolExecutor
             }
 
             // 4. Second Call to LLM (with tool results)
-            const finalResult = await openAIClient.getChatCompletions(
-                AZURE_DEPLOYMENT_ID,
-                messages,
-                { temperature: 0.7, maxTokens: 800 }
-            );
+            const finalResult = await callChatCompletions(messages, {
+                temperature: 0.7,
+                maxTokens: 800
+            });
 
             return finalResult.choices[0].message.content;
         }
@@ -191,7 +318,7 @@ exports.generateChatResponse = async (messages, tools = null, customToolExecutor
         return message.content;
 
     } catch (error) {
-        console.error("❌ Azure OpenAI Error:", error);
+        console.error("AI Provider Error:", error);
         throw new Error("Failed to generate AI response: " + error.message);
     }
 };
@@ -270,11 +397,10 @@ exports.generateSimpleCompletion = async (systemPrompt, userPrompt) => {
             { role: "user", content: userPrompt }
         ];
 
-        const result = await openAIClient.getChatCompletions(
-            AZURE_DEPLOYMENT_ID,
-            messages,
-            { temperature: 0.3, maxTokens: 200 } // Low temp for deterministic results (dates/JSON)
-        );
+        const result = await callChatCompletions(messages, {
+            temperature: 0.3,
+            maxTokens: 200 // Low temp for deterministic results (dates/JSON)
+        });
 
         return result.choices[0].message.content;
     } catch (error) {

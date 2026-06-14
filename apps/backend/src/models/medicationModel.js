@@ -61,14 +61,36 @@ const MedicationModel = {
     },
 
     delete: async (id) => {
-        const result = await pool.query(
-            `UPDATE medications
-       SET is_active=false, updated_at=NOW()
-       WHERE id=$1
-       RETURNING *`,
-            [id]
-        );
-        return result.rows[0];
+        // Permanently delete the medication along with its schedules and dose logs.
+        // Order matters because of FKs: logs -> schedules -> medication.
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+
+            const schedRes = await client.query(
+                "SELECT id FROM medication_schedules WHERE medication_id = $1",
+                [id]
+            );
+            const schedIds = schedRes.rows.map((r) => r.id);
+
+            if (schedIds.length > 0) {
+                await client.query("DELETE FROM medication_logs WHERE schedule_id = ANY($1)", [schedIds]);
+                await client.query("DELETE FROM medication_schedules WHERE id = ANY($1)", [schedIds]);
+            }
+
+            const result = await client.query(
+                "DELETE FROM medications WHERE id = $1 RETURNING *",
+                [id]
+            );
+
+            await client.query("COMMIT");
+            return result.rows[0];
+        } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        } finally {
+            client.release();
+        }
     }
 };
 
