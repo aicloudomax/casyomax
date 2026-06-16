@@ -2,10 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import * as SecureStore from '@/services/SecureStore';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -15,14 +14,20 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
 import { UsageBanner } from '../../components/UsageBanner';
 import { ENDPOINTS } from '../../constants/ApiConstants';
 import { usePlan } from '../../hooks/usePlan';
 import ApiHelper from '../../services/ApiHelper';
+import { useTheme } from '../../theme/ThemeProvider';
 
 
 
 export default function ChatScreen() {
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
+
     const [messages, setMessages] = useState([]);
     const [inputText, setInputText] = useState('');
     const [isRecording, setIsRecording] = useState(false);
@@ -227,6 +232,14 @@ export default function ChatScreen() {
 
     const playAudio = async (base64) => {
         try {
+            // On web, expo-file-system and the iOS audio-mode API are unavailable.
+            // Play straight from a base64 data URI.
+            if (Platform.OS === 'web') {
+                const { sound } = await Audio.Sound.createAsync({ uri: `data:audio/mp3;base64,${base64}` });
+                await sound.playAsync();
+                return;
+            }
+
             // Configure audio mode to use main speaker (not earpiece) on iOS
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: false,
@@ -276,7 +289,7 @@ export default function ChatScreen() {
                 ))}
                 {isProcessing && (
                     <View style={styles.loadingBubble}>
-                        <ActivityIndicator size="small" color="#007bff" />
+                        <ActivityIndicator size="small" color={colors.primary} />
                     </View>
                 )}
             </ScrollView>
@@ -285,13 +298,14 @@ export default function ChatScreen() {
                 <TextInput
                     style={styles.input}
                     placeholder="Type a message..."
+                    placeholderTextColor={colors.textMuted}
                     value={inputText}
                     onChangeText={setInputText}
                     editable={!isProcessing && !isRecording}
                 />
                 {inputText.length > 0 ? (
-                    <TouchableOpacity onPress={handleSendText} disabled={isProcessing}>
-                        <Ionicons name="send" size={24} color="#007bff" />
+                    <TouchableOpacity onPress={handleSendText} disabled={isProcessing} style={styles.sendButton}>
+                        <Ionicons name="send" size={20} color={colors.textOnPrimary} />
                     </TouchableOpacity>
                 ) : (
                     <TouchableOpacity
@@ -300,7 +314,7 @@ export default function ChatScreen() {
                         disabled={isProcessing}
                         style={[styles.micButton, isRecording && styles.micActive]}
                     >
-                        <Ionicons name="mic" size={24} color={isRecording ? "white" : "#007bff"} />
+                        <Ionicons name="mic" size={20} color={colors.textOnPrimary} />
                     </TouchableOpacity>
                 )}
             </View>
@@ -308,72 +322,95 @@ export default function ChatScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#eff6ff',
-    },
-    messagesList: {
-        padding: 16,
-        paddingBottom: 20,
-    },
-    messageBubble: {
-        maxWidth: '80%',
-        padding: 12,
-        borderRadius: 16,
-        marginBottom: 12,
-    },
-    userBubble: {
-        alignSelf: 'flex-end',
-        backgroundColor: '#007bff',
-        borderBottomRightRadius: 4,
-    },
-    assistantBubble: {
-        alignSelf: 'flex-start',
-        backgroundColor: '#ffffff',
-        borderBottomLeftRadius: 4,
-        shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    userText: {
-        color: '#ffffff',
-        fontSize: 16,
-    },
-    assistantText: {
-        color: '#333333',
-        fontSize: 16,
-    },
-    loadingBubble: {
-        alignSelf: 'flex-start',
-        backgroundColor: '#ffffff',
-        padding: 12,
-        borderRadius: 16,
-        borderBottomLeftRadius: 4,
-    },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        backgroundColor: '#ffffff',
-        borderTopWidth: 1,
-        borderTopColor: '#e5e5e5',
-    },
-    input: {
-        flex: 1,
-        backgroundColor: '#f3f4f6',
-        borderRadius: 20,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        marginRight: 10,
-        fontSize: 16,
-    },
-    micButton: {
-        padding: 8,
-        borderRadius: 20,
-    },
-    micActive: {
-        backgroundColor: '#ef4444',
-    }
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: c.background,
+        },
+        messagesList: {
+            padding: 16,
+            paddingBottom: 20,
+        },
+        messageBubble: {
+            maxWidth: '80%',
+            padding: 12,
+            borderRadius: r.lg,
+            marginBottom: 12,
+        },
+        userBubble: {
+            alignSelf: 'flex-end',
+            backgroundColor: c.primary,
+            borderBottomRightRadius: 4,
+        },
+        assistantBubble: {
+            alignSelf: 'flex-start',
+            backgroundColor: c.surface,
+            borderBottomLeftRadius: 4,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        userText: {
+            color: c.textOnPrimary,
+            fontFamily: f.regular,
+            fontSize: 16,
+        },
+        assistantText: {
+            color: c.text,
+            fontFamily: f.regular,
+            fontSize: 16,
+        },
+        loadingBubble: {
+            alignSelf: 'flex-start',
+            backgroundColor: c.surface,
+            padding: 12,
+            borderRadius: r.lg,
+            borderBottomLeftRadius: 4,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        inputContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            padding: 12,
+            backgroundColor: c.surface,
+            borderTopWidth: 1,
+            borderTopColor: c.border,
+        },
+        input: {
+            flex: 1,
+            backgroundColor: c.surfaceAlt,
+            borderRadius: r.pill,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            marginRight: 10,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        sendButton: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: c.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        micButton: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: c.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        micActive: {
+            backgroundColor: c.danger,
+        }
+    });
+};

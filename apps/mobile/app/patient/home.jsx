@@ -3,8 +3,10 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
+import { useTheme } from '../../theme/ThemeProvider';
 
 import Markdown from 'react-native-markdown-display';
 import Toast from 'react-native-toast-message';
@@ -32,6 +34,50 @@ const MEDICAL_SOURCES = [
     { name: 'U.S. Food and Drug Administration (FDA) – Drugs', url: 'https://www.fda.gov/drugs' },
 ];
 
+// Animated "typing" dots shown while the assistant is generating a reply.
+const TypingDot = ({ delay, color }) => {
+    const v = useRef(new Animated.Value(0.3)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(v, { toValue: 1, duration: 350, useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0.3, duration: 350, useNativeDriver: true }),
+            ])
+        );
+        const t = setTimeout(() => loop.start(), delay);
+        return () => { clearTimeout(t); loop.stop(); };
+    }, []);
+    return (
+        <Animated.View
+            style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color, opacity: v, marginHorizontal: 2 }}
+        />
+    );
+};
+
+const TypingDots = ({ color }) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <TypingDot delay={0} color={color} />
+        <TypingDot delay={160} color={color} />
+        <TypingDot delay={320} color={color} />
+    </View>
+);
+
+// Progressive "typewriter" reveal for a newly received assistant message.
+const TypingText = ({ fullText, renderText, onDone }) => {
+    const [count, setCount] = useState(0);
+    useEffect(() => { setCount(0); }, [fullText]);
+    useEffect(() => {
+        if (count >= fullText.length) {
+            if (fullText.length > 0) onDone?.();
+            return;
+        }
+        const step = Math.max(2, Math.ceil(fullText.length / 80)); // ~80 ticks total
+        const id = setTimeout(() => setCount((c) => Math.min(fullText.length, c + step)), 16);
+        return () => clearTimeout(id);
+    }, [count, fullText]);
+    return renderText(fullText.slice(0, count));
+};
+
 const PatientHomeScreen = () => {
     const router = useRouter();
     const [patientId, setPatientId] = useState(null);
@@ -49,8 +95,11 @@ const PatientHomeScreen = () => {
     const [audioLevel, setAudioLevel] = useState(0); // Normalized 0-1
 
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isAiTyping, setIsAiTyping] = useState(false);
     const [loadingText, setLoadingText] = useState('Thinking...');
+    const listRef = useRef(null);
     const [sourcesVisible, setSourcesVisible] = useState(false);
+    const [dismissedReminders, setDismissedReminders] = useState({});
     const notificationListener = useRef();
     const responseListener = useRef();
     const { plan, getRemainingUsage, isFeatureLocked, refreshPlan } = usePlan();
@@ -58,6 +107,10 @@ const PatientHomeScreen = () => {
 
     // Animation values
     const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
 
 
     useEffect(() => {
@@ -79,27 +132,33 @@ const PatientHomeScreen = () => {
 
 
     useEffect(() => {
-        // 1. Setup listeners
-        notificationListener.current = Notifications.addNotificationReceivedListener(handleNotification);
-        responseListener.current = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+        if (Platform.OS !== 'web') {
+            // 1. Setup listeners
+            notificationListener.current = Notifications.addNotificationReceivedListener(handleNotification);
+            responseListener.current = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
 
-        // 2. Check if app was opened from a notification (cold start)
-        const checkInitialNotification = async () => {
-            const response = await Notifications.getLastNotificationResponseAsync();
-            if (response) {
-                handleNotificationResponse(response);
-            }
-        };
-        checkInitialNotification();
+            // 2. Check if app was opened from a notification (cold start)
+            const checkInitialNotification = async () => {
+                const response = await Notifications.getLastNotificationResponseAsync();
+                if (response) {
+                    handleNotificationResponse(response);
+                }
+            };
+            checkInitialNotification();
 
-        // 3. Setup notifications & fetch history
-        setupNotifications();
+            // 3. Setup notifications
+            setupNotifications();
+        } else {
+            console.log("Push notification listeners are not supported on web - skipping setup.");
+        }
+
+        // Fetch patient data on every platform.
         fetchPatientId(); // Fetch patient ID first
         fetchHistory();
 
         return () => {
-            notificationListener.current && notificationListener.current.remove();
-            responseListener.current && responseListener.current.remove();
+            notificationListener.current?.remove?.();
+            responseListener.current?.remove?.();
 
             // Cleanup recording on unmount
             if (recordingRef.current) {
@@ -110,6 +169,18 @@ const PatientHomeScreen = () => {
                 }
             }
         };
+    }, []);
+
+    // Poll for new due reminders while the screen is open. On web there is no
+    // push-notification channel, so without this a reminder only appears after a
+    // manual refresh. The dedup-by-id merge in fetchHistory keeps this safe to
+    // run repeatedly, and it also acts as a safety net if a native push is missed.
+    useEffect(() => {
+        const POLL_MS = 20000; // 20s
+        const interval = setInterval(() => {
+            fetchHistory();
+        }, POLL_MS);
+        return () => clearInterval(interval);
     }, []);
 
     const fetchPatientId = async () => {
@@ -162,6 +233,20 @@ const PatientHomeScreen = () => {
         )
         .sort((a, b) => a.data.logId - b.data.logId) // Deterministic sort
         .shift()?.data.logId;
+
+    // Due reminders are surfaced in a bottom sheet (not inline in the chat).
+    // We queue pending ones by logId and show the first that hasn't been dismissed.
+    const pendingReminders = messages
+        .filter(m => m.type === 'medication' && m.data?.status === 'pending')
+        .sort((a, b) => a.data.logId - b.data.logId);
+    const currentReminder = pendingReminders.find(m => !dismissedReminders[m.data.logId]) || null;
+
+    const dismissReminder = () => {
+        if (currentReminder) {
+            const logId = currentReminder.data.logId;
+            setDismissedReminders(prev => ({ ...prev, [logId]: true }));
+        }
+    };
 
     const handleVoiceDone = (logId) => {
         console.log("✅ Voice interaction done for:", logId);
@@ -357,6 +442,12 @@ const PatientHomeScreen = () => {
         }
     };
 
+    // Once a message has finished its typewriter reveal, clear the flag so it
+    // never re-animates (e.g. on list re-render or when scrolled back into view).
+    const markDoneAnimating = (id) => {
+        setMessages(prev => prev.map(m => (m.id === id ? { ...m, animate: false } : m)));
+    };
+
     const sendMessage = async () => {
         if (!message.trim()) return;
         if (!patientId) {
@@ -385,6 +476,7 @@ const PatientHomeScreen = () => {
         // 1. Add user message optimistically
         setMessages(prev => [...prev, { id: Date.now().toString(), text: userText, sender: 'patient', type: 'text' }]);
         setMessage('');
+        setIsAiTyping(true);
 
         try {
             // 2. Call Backend
@@ -396,6 +488,7 @@ const PatientHomeScreen = () => {
 
             // If backend returns a 403 or specific limit error
             if (response.error === "Daily limit reached") {
+                setIsAiTyping(false);
                 Alert.alert("Limit Reached", response.upgradeMessage || "You've hit your daily limit.");
                 // Remove the message we just added since it was rejected
                 setMessages(prev => prev.filter(m => m.id !== (userText + "temp"))); // This ID logic in home.jsx is a bit loose
@@ -404,13 +497,15 @@ const PatientHomeScreen = () => {
                 return;
             }
 
-            // 3. Add AI Response
+            // 3. Add AI Response (with typewriter reveal)
             if (response && response.message) {
+                setIsAiTyping(false);
                 setMessages(prev => [...prev, {
                     id: response.messageId || Date.now().toString(),
                     text: response.message,
                     sender: 'caretaker',
-                    type: 'text'
+                    type: 'text',
+                    animate: true
                 }]);
 
                 // 4. Play Audio if present
@@ -424,6 +519,7 @@ const PatientHomeScreen = () => {
             }
         } catch (error) {
             console.error("Home Chat Error:", error);
+            setIsAiTyping(false);
             const errorMsg = error.message || "";
             if (errorMsg.includes("limit") || errorMsg.includes("403")) {
                 Alert.alert("Limit Reached", "You have reached your daily chat limit.");
@@ -755,10 +851,11 @@ const PatientHomeScreen = () => {
             body: {
                 fontSize: 16,
                 lineHeight: 22,
-                color: item.sender === 'patient' ? '#FFF' : '#000',
+                fontFamily: theme.fonts.regular,
+                color: item.sender === 'patient' ? colors.textOnPrimary : colors.text,
             },
             strong: {
-                fontWeight: 'bold',
+                fontFamily: theme.fonts.bold,
             },
             em: {
                 fontStyle: 'italic',
@@ -769,7 +866,7 @@ const PatientHomeScreen = () => {
             },
             // Citation links (Apple Guideline 1.4.1) — visibly tappable.
             link: {
-                color: '#0066CC',
+                color: colors.primary,
                 textDecorationLine: 'underline',
             },
         };
@@ -780,6 +877,19 @@ const PatientHomeScreen = () => {
                     <Text style={[styles.messageText, styles.patientText]}>
                         {item.text}
                     </Text>
+                ) : item.animate ? (
+                    <TypingText
+                        fullText={item.text}
+                        onDone={() => markDoneAnimating(item.id)}
+                        renderText={(t) => (
+                            <Markdown
+                                style={markdownStyles}
+                                onLinkPress={(url) => { Linking.openURL(url).catch(() => {}); return false; }}
+                            >
+                                {t}
+                            </Markdown>
+                        )}
+                    />
                 ) : (
                     <Markdown
                         style={markdownStyles}
@@ -803,7 +913,7 @@ const PatientHomeScreen = () => {
                     value={message}
                     onChangeText={setMessage}
                     placeholder="Ask Casyomax"
-                    placeholderTextColor="#666"
+                    placeholderTextColor={colors.textMuted}
                     multiline
                 />
                 {/* Mic inside the input bar */}
@@ -812,18 +922,18 @@ const PatientHomeScreen = () => {
                     disabled={isProcessing || isRecording}
                     style={styles.innerMicButton}
                 >
-                    <Ionicons name="mic" size={20} color="#333" />
+                    <Ionicons name="mic" size={22} color={colors.primary} />
                 </TouchableOpacity>
             </View>
 
             {/* Right Action Button (Send or Headset) */}
             {/* Right Action Button (Always Send) */}
             <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: message.trim().length > 0 ? '#000' : '#E5E5EA' }]}
+                style={[styles.actionButton, { backgroundColor: message.trim().length > 0 ? colors.primary : colors.surfaceAlt }]}
                 onPress={sendMessage}
                 disabled={message.trim().length === 0}
             >
-                <Ionicons name="arrow-up" size={20} color={message.trim().length > 0 ? "#FFF" : "#8E8E93"} />
+                <Ionicons name="arrow-up" size={20} color={message.trim().length > 0 ? colors.textOnPrimary : colors.textMuted} />
             </TouchableOpacity>
         </View>
     );
@@ -864,7 +974,7 @@ const PatientHomeScreen = () => {
 
             {/* Apple Guideline 1.4.1 — always-visible disclaimer + easy access to medical sources */}
             <View style={styles.disclaimerBar}>
-                <Ionicons name="information-circle-outline" size={16} color="#5A6473" />
+                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
                 <Text style={styles.disclaimerText}>
                     General health information, not medical advice. Always consult a healthcare professional.
                 </Text>
@@ -874,12 +984,20 @@ const PatientHomeScreen = () => {
             </View>
 
             <FlatList
-
-                data={messages}
+                ref={listRef}
+                data={messages.filter(m => m.type !== 'medication')}
                 renderItem={renderItem}
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.messagesList}
                 style={{ flex: 1 }}
+                onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+                ListFooterComponent={
+                    isAiTyping ? (
+                        <View style={[styles.messageBubble, styles.caretakerBubble, { paddingVertical: 16 }]}>
+                            <TypingDots color={colors.textMuted} />
+                        </View>
+                    ) : null
+                }
             />
             {renderInput()}
             {isVoiceMode && renderRecordingOverlay()}
@@ -891,7 +1009,7 @@ const PatientHomeScreen = () => {
                         <View style={styles.sourcesHeader}>
                             <Text style={styles.sourcesTitle}>Medical Information Sources</Text>
                             <TouchableOpacity onPress={() => setSourcesVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                <Ionicons name="close" size={24} color="#333" />
+                                <Ionicons name="close" size={24} color={colors.text} />
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.sourcesIntro}>
@@ -907,7 +1025,7 @@ const PatientHomeScreen = () => {
                                     style={styles.sourceRow}
                                     onPress={() => Linking.openURL(src.url).catch(() => {})}
                                 >
-                                    <Ionicons name="open-outline" size={18} color="#0066CC" />
+                                    <Ionicons name="open-outline" size={18} color={colors.primary} />
                                     <View style={{ flex: 1, marginLeft: 10 }}>
                                         <Text style={styles.sourceName}>{src.name}</Text>
                                         <Text style={styles.sourceUrl}>{src.url}</Text>
@@ -921,14 +1039,66 @@ const PatientHomeScreen = () => {
                     </View>
                 </View>
             </Modal>
+
+            {/* Medication reminder bottom sheet — surfaces a due dose prominently */}
+            <Modal
+                visible={!!currentReminder}
+                transparent
+                animationType="slide"
+                onRequestClose={dismissReminder}
+            >
+                <Pressable style={styles.reminderOverlay} onPress={dismissReminder}>
+                    <Pressable style={styles.reminderSheet} onPress={() => {}}>
+                        <View style={styles.reminderHandle} />
+                        {currentReminder && (
+                            <MedicationCard
+                                medicationName={currentReminder.data.medicationName}
+                                dosage={currentReminder.data.dosage}
+                                time={currentReminder.data.time}
+                                status={currentReminder.data.status}
+                                isActive={currentReminder.data.logId === activeLogId}
+                                onVoiceDone={() => handleVoiceDone(currentReminder.data.logId)}
+                                onAction={(action) => handleMedicationAction(currentReminder.data.logId, action)}
+                            />
+                        )}
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </KeyboardAvoidingView>
     );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F7FA',
+        backgroundColor: c.background,
+    },
+    reminderOverlay: {
+        flex: 1,
+        backgroundColor: c.overlay,
+        justifyContent: 'flex-end',
+    },
+    reminderSheet: {
+        backgroundColor: c.surface,
+        borderTopLeftRadius: r.xl,
+        borderTopRightRadius: r.xl,
+        paddingHorizontal: 16,
+        paddingTop: 10,
+        paddingBottom: 28,
+        ...sh.lg,
+    },
+    reminderHandle: {
+        alignSelf: 'center',
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: c.borderStrong,
+        marginBottom: 12,
     },
     messagesList: {
         padding: 16,
@@ -937,40 +1107,41 @@ const styles = StyleSheet.create({
     disclaimerBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#EEF2F7',
+        backgroundColor: c.surfaceAlt,
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderBottomWidth: 1,
-        borderBottomColor: '#DCE3EC',
+        borderBottomColor: c.border,
     },
     disclaimerText: {
         flex: 1,
         fontSize: 11,
         lineHeight: 15,
-        color: '#5A6473',
+        color: c.textSecondary,
+        fontFamily: f.regular,
         marginLeft: 6,
     },
     sourcesButton: {
         marginLeft: 8,
         paddingHorizontal: 10,
         paddingVertical: 4,
-        backgroundColor: '#0066CC',
-        borderRadius: 12,
+        backgroundColor: c.primary,
+        borderRadius: r.pill,
     },
     sourcesButtonText: {
-        color: '#FFF',
+        color: c.textOnPrimary,
         fontSize: 12,
-        fontWeight: '600',
+        fontFamily: f.semibold,
     },
     sourcesOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)',
+        backgroundColor: c.overlay,
         justifyContent: 'flex-end',
     },
     sourcesSheet: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
+        backgroundColor: c.surface,
+        borderTopLeftRadius: r.xl,
+        borderTopRightRadius: r.xl,
         padding: 20,
         maxHeight: '80%',
     },
@@ -982,34 +1153,37 @@ const styles = StyleSheet.create({
     },
     sourcesTitle: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#1A1A1A',
+        fontFamily: f.bold,
+        color: c.text,
     },
     sourcesIntro: {
         fontSize: 13,
         lineHeight: 19,
-        color: '#5A6473',
+        color: c.textSecondary,
+        fontFamily: f.regular,
     },
     sourceRow: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#EEE',
+        borderBottomColor: c.border,
     },
     sourceName: {
         fontSize: 15,
-        fontWeight: '600',
-        color: '#1A1A1A',
+        fontFamily: f.semibold,
+        color: c.text,
     },
     sourceUrl: {
         fontSize: 12,
-        color: '#0066CC',
+        color: c.primary,
+        fontFamily: f.regular,
         marginTop: 2,
     },
     sourcesFooter: {
         fontSize: 12,
-        color: '#9098A3',
+        color: c.textMuted,
+        fontFamily: f.regular,
         marginTop: 14,
         textAlign: 'center',
     },
@@ -1019,7 +1193,8 @@ const styles = StyleSheet.create({
     },
     statusText: {
         fontSize: 12,
-        color: '#666',
+        color: c.textSecondary,
+        fontFamily: f.regular,
         marginTop: 4,
         textAlign: 'right',
         fontStyle: 'italic',
@@ -1027,43 +1202,50 @@ const styles = StyleSheet.create({
     messageBubble: {
         maxWidth: '80%',
         padding: 12,
-        borderRadius: 12,
+        borderRadius: r.lg,
         marginBottom: 12,
     },
     patientBubble: {
         alignSelf: 'flex-end',
-        backgroundColor: '#007AFF', // Blue for patient
-        borderBottomRightRadius: 2,
+        backgroundColor: c.primary, // Sender (patient)
+        borderBottomRightRadius: r.sm,
     },
     caretakerBubble: {
         alignSelf: 'flex-start',
-        backgroundColor: '#E1E4E8', // Gray for caretaker
-        borderBottomLeftRadius: 2,
+        backgroundColor: c.surface, // Assistant
+        borderWidth: 1,
+        borderColor: c.border,
+        borderBottomLeftRadius: r.sm,
+        ...sh.sm,
     },
     messageText: {
         fontSize: 16,
         lineHeight: 22,
+        fontFamily: f.regular,
     },
     patientText: {
-        color: '#FFF',
+        color: c.textOnPrimary,
     },
     caretakerText: {
-        color: '#000',
+        color: c.text,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end', // Align bottom for multiline
         padding: 8,
-        backgroundColor: '#FFF',
-        borderRadius: 24,
+        backgroundColor: c.surface,
+        borderRadius: r.pill,
+        borderWidth: 1,
+        borderColor: c.border,
         marginBottom: 16,
         marginHorizontal: 16,
+        ...sh.sm,
     },
     plusButton: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: '#F0F0F0',
+        backgroundColor: c.surfaceAlt,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 8,
@@ -1073,8 +1255,8 @@ const styles = StyleSheet.create({
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F4F4F4',
-        borderRadius: 24,
+        backgroundColor: c.surfaceAlt,
+        borderRadius: r.pill,
         paddingHorizontal: 16,
         paddingVertical: 8,
         minHeight: 48,
@@ -1083,14 +1265,14 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         fontSize: 16,
-        color: '#000',
+        color: c.text,
+        fontFamily: f.regular,
         maxHeight: 100,
         paddingTop: 0,
         paddingBottom: 0,
     },
     innerMicButton: {
         marginLeft: 8,
-        opacity: 0.6,
     },
     actionButton: {
         width: 40,
@@ -1103,27 +1285,23 @@ const styles = StyleSheet.create({
     header: {
         padding: 16,
         paddingTop: 60,
-        backgroundColor: '#FFF',
+        backgroundColor: c.surface,
         borderBottomWidth: 1,
-        borderBottomColor: '#E1E4E8',
+        borderBottomColor: c.border,
         alignItems: 'flex-end',
     },
     historyButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#2D9CDB',
+        backgroundColor: c.primary,
         paddingHorizontal: 16,
         paddingVertical: 8,
-        borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-        elevation: 3,
+        borderRadius: r.pill,
+        ...sh.sm,
     },
     historyButtonText: {
-        color: '#FFF',
-        fontWeight: '600',
+        color: c.textOnPrimary,
+        fontFamily: f.semibold,
         marginLeft: 6,
     },
     // Overlay Styles
@@ -1171,7 +1349,7 @@ const styles = StyleSheet.create({
     recordingText: {
         color: '#FFFFFF',
         fontSize: 20,
-        fontWeight: '600',
+        fontFamily: f.semibold,
         marginTop: 20,
         textShadowColor: 'rgba(0, 0, 0, 0.5)',
         textShadowOffset: { width: 0, height: 1 },
@@ -1191,8 +1369,9 @@ const styles = StyleSheet.create({
     exitButtonText: {
         color: '#FFF',
         fontSize: 16,
-        fontWeight: '600',
+        fontFamily: f.semibold,
     },
-});
+    });
+};
 
 export default PatientHomeScreen;

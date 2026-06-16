@@ -35,22 +35,7 @@ export default function CaretakerLayout() {
         <Stack>
             <Stack.Screen
                 name="home"
-                options={{
-                    title: 'Caretaker Dashboard',
-                    headerRight: () => (
-                        <TouchableOpacity onPress={() => router.push('/caretaker/profile')} style={styles.profileButton}>
-                            {profileImage ? (
-                                <Image source={{ uri: profileImage }} style={styles.avatar} />
-                            ) : initials ? (
-                                <View style={styles.initialsContainer}>
-                                    <Text style={styles.initialsText}>{initials}</Text>
-                                </View>
-                            ) : (
-                                <Ionicons name="person-circle-outline" size={30} color="#4A90E2" />
-                            )}
-                        </TouchableOpacity>
-                    ),
-                }}
+                options={{ headerShown: false }}
             />
             <Stack.Screen name="profile" options={{ title: 'Caretaker Profile', presentation: 'modal' }} />
             <Stack.Screen name="patient/[id]" options={{ title: 'Patient Details', headerShown: false }} />

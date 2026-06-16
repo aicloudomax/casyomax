@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../theme/ThemeProvider';
 
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 3; // Must be odd to have a center
@@ -11,6 +12,9 @@ const MINUTES = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0
 const PERIODS = ['AM', 'PM'];
 
 const CustomTimePicker = ({ visible, onClose, onSelect, initialTime }) => {
+    const theme = useTheme();
+    const styles = useMemo(() => makeStyles(theme), [theme]);
+
     const [selectedHour, setSelectedHour] = useState('12');
     const [selectedMinute, setSelectedMinute] = useState('00');
     const [selectedPeriod, setSelectedPeriod] = useState('AM');
@@ -216,96 +220,102 @@ const CustomTimePicker = ({ visible, onClose, onSelect, initialTime }) => {
     );
 };
 
-const styles = StyleSheet.create({
-    overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    container: {
-        backgroundColor: '#FFF',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 20,
-        paddingBottom: 40,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginBottom: 20,
-        color: '#333',
-    },
-    pickerContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative', // For absolute overlay
-    },
-    selectionOverlay: {
-        position: 'absolute',
-        top: ITEM_HEIGHT, // Center row (index 1 of 3)
-        left: 0,
-        right: 0,
-        height: ITEM_HEIGHT,
-        backgroundColor: '#F0F4F8',
-        borderRadius: 8,
-        zIndex: -1, // Behind text
-    },
-    column: {
-        width: 80,
-        height: '100%',
-    },
-    item: {
-        height: ITEM_HEIGHT,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    itemText: {
-        fontSize: 20,
-        color: '#999',
-    },
-    selectedItemText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#2D9CDB',
-    },
-    separator: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-        marginTop: 0,
-        zIndex: 1,
-    },
-    actions: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 20,
-    },
-    button: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#F0F4F8',
-        marginRight: 8,
-    },
-    confirmButton: {
-        backgroundColor: '#2D9CDB',
-        marginLeft: 8,
-    },
-    cancelText: {
-        color: '#666',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    confirmText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    return StyleSheet.create({
+        overlay: {
+            flex: 1,
+            backgroundColor: c.overlay,
+            justifyContent: 'flex-end',
+        },
+        container: {
+            backgroundColor: c.surface,
+            borderTopLeftRadius: r.xl,
+            borderTopRightRadius: r.xl,
+            padding: 20,
+            paddingBottom: 40,
+        },
+        title: {
+            fontSize: 18,
+            fontFamily: f.bold,
+            textAlign: 'center',
+            marginBottom: 20,
+            color: c.text,
+        },
+        pickerContainer: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            position: 'relative', // For absolute overlay
+        },
+        selectionOverlay: {
+            position: 'absolute',
+            top: ITEM_HEIGHT, // Center row (index 1 of 3)
+            left: 0,
+            right: 0,
+            height: ITEM_HEIGHT,
+            backgroundColor: c.primarySoft,
+            borderRadius: r.sm,
+            zIndex: -1, // Behind text
+        },
+        column: {
+            width: 80,
+            height: '100%',
+        },
+        item: {
+            height: ITEM_HEIGHT,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        itemText: {
+            fontSize: 20,
+            fontFamily: f.regular,
+            color: c.textMuted,
+        },
+        selectedItemText: {
+            fontSize: 24,
+            fontFamily: f.bold,
+            color: c.primary,
+        },
+        separator: {
+            fontSize: 24,
+            fontFamily: f.bold,
+            color: c.text,
+            marginTop: 0,
+            zIndex: 1,
+        },
+        actions: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 20,
+        },
+        button: {
+            flex: 1,
+            padding: 16,
+            borderRadius: r.md,
+            alignItems: 'center',
+        },
+        cancelButton: {
+            backgroundColor: c.surfaceAlt,
+            marginRight: 8,
+        },
+        confirmButton: {
+            backgroundColor: c.primary,
+            marginLeft: 8,
+        },
+        cancelText: {
+            color: c.textSecondary,
+            fontFamily: f.bold,
+            fontSize: 16,
+        },
+        confirmText: {
+            color: c.textOnPrimary,
+            fontFamily: f.bold,
+            fontSize: 16,
+        },
+    });
+};
 
 export default CustomTimePicker;

@@ -1,14 +1,20 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { ENDPOINTS } from '../../constants/ApiConstants';
 import ApiHelper from '../../services/ApiHelper';
+import { useTheme } from '../../theme/ThemeProvider';
+import { AppText } from '../../components/ui/AppText';
+import { Button } from '../../components/ui/Button';
 
 const ResetPasswordScreen = () => {
     const router = useRouter();
     const { email } = useLocalSearchParams();
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
 
     const [otp, setOtp] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -98,24 +104,24 @@ const ResetPasswordScreen = () => {
         <View style={styles.container}>
             <View style={styles.logoContainer}>
                 <View style={styles.iconCircle}>
-                    <MaterialCommunityIcons name="shield-key" size={48} color="#4A90E2" />
+                    <MaterialCommunityIcons name="shield-key" size={48} color={colors.primary} />
                 </View>
-                <Text style={styles.title}>Reset Password</Text>
-                <Text style={styles.subtitle}>
+                <AppText variant="display" style={styles.title}>Reset Password</AppText>
+                <AppText variant="body" color="textSecondary" style={styles.subtitle}>
                     Enter the 6-digit code sent to {email || 'your email'} and create your new password.
-                </Text>
+                </AppText>
             </View>
 
             <View style={styles.formContainer}>
                 {/* OTP Input */}
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Verification Code</Text>
+                    <AppText variant="label" style={styles.label}>Verification Code</AppText>
                     <View style={styles.inputWrapper}>
-                        <MaterialCommunityIcons name="numeric" size={20} color="#999" style={styles.inputIcon} />
+                        <MaterialCommunityIcons name="numeric" size={20} color={colors.textMuted} style={styles.inputIcon} />
                         <TextInput
                             style={styles.input}
                             placeholder="Enter 6-digit code"
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.textMuted}
                             value={otp}
                             onChangeText={(text) => setOtp(text.replace(/[^0-9]/g, '').slice(0, 6))}
                             keyboardType="number-pad"
@@ -127,13 +133,13 @@ const ResetPasswordScreen = () => {
 
                 {/* New Password Input */}
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>New Password</Text>
+                    <AppText variant="label" style={styles.label}>New Password</AppText>
                     <View style={styles.inputWrapper}>
-                        <MaterialCommunityIcons name="lock-outline" size={20} color="#999" style={styles.inputIcon} />
+                        <MaterialCommunityIcons name="lock-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                         <TextInput
                             style={styles.input}
                             placeholder="Enter new password"
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.textMuted}
                             value={newPassword}
                             onChangeText={setNewPassword}
                             secureTextEntry={!showPassword}
@@ -146,7 +152,7 @@ const ResetPasswordScreen = () => {
                             <MaterialCommunityIcons
                                 name={showPassword ? 'eye-off' : 'eye'}
                                 size={22}
-                                color="#666"
+                                color={colors.textSecondary}
                             />
                         </TouchableOpacity>
                     </View>
@@ -154,13 +160,13 @@ const ResetPasswordScreen = () => {
 
                 {/* Confirm Password Input */}
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Confirm Password</Text>
+                    <AppText variant="label" style={styles.label}>Confirm Password</AppText>
                     <View style={styles.inputWrapper}>
-                        <MaterialCommunityIcons name="lock-check-outline" size={20} color="#999" style={styles.inputIcon} />
+                        <MaterialCommunityIcons name="lock-check-outline" size={20} color={colors.textMuted} style={styles.inputIcon} />
                         <TextInput
                             style={styles.input}
                             placeholder="Confirm new password"
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.textMuted}
                             value={confirmPassword}
                             onChangeText={setConfirmPassword}
                             secureTextEntry={!showConfirmPassword}
@@ -173,30 +179,28 @@ const ResetPasswordScreen = () => {
                             <MaterialCommunityIcons
                                 name={showConfirmPassword ? 'eye-off' : 'eye'}
                                 size={22}
-                                color="#666"
+                                color={colors.textSecondary}
                             />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.resetButton, loading && styles.disabledButton]}
+                <Button
+                    title="Reset Password"
                     onPress={handleResetPassword}
+                    loading={loading}
                     disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#FFF" />
-                    ) : (
-                        <Text style={styles.resetButtonText}>Reset Password</Text>
-                    )}
-                </TouchableOpacity>
+                    fullWidth
+                    size="lg"
+                    style={styles.resetButton}
+                />
 
                 <TouchableOpacity
                     style={styles.resendButton}
                     onPress={handleResendOTP}
                     disabled={loading}
                 >
-                    <Text style={styles.resendButtonText}>Didn't receive code? Resend</Text>
+                    <AppText variant="body" color="primary">Didn't receive code? Resend</AppText>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -204,120 +208,99 @@ const ResetPasswordScreen = () => {
                     onPress={() => router.replace('/login')}
                     disabled={loading}
                 >
-                    <MaterialCommunityIcons name="arrow-left" size={20} color="#4A90E2" />
-                    <Text style={styles.backButtonText}>Back to Login</Text>
+                    <MaterialCommunityIcons name="arrow-left" size={20} color={colors.primary} />
+                    <AppText variant="body" color="primary" style={styles.backButtonText}>Back to Login</AppText>
                 </TouchableOpacity>
             </View>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    logoContainer: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    iconCircle: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#E8F2FC',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 12,
-    },
-    subtitle: {
-        fontSize: 14,
-        color: '#666',
-        textAlign: 'center',
-        paddingHorizontal: 20,
-        lineHeight: 20,
-    },
-    formContainer: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 8,
-        fontWeight: '600',
-    },
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F5F7FA',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-    },
-    inputIcon: {
-        paddingLeft: 16,
-    },
-    input: {
-        flex: 1,
-        padding: 16,
-        fontSize: 16,
-        color: '#333',
-    },
-    eyeButton: {
-        padding: 12,
-    },
-    resetButton: {
-        backgroundColor: '#4A90E2',
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    disabledButton: {
-        backgroundColor: '#A0C4E8',
-    },
-    resetButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    resendButton: {
-        alignItems: 'center',
-        marginTop: 16,
-    },
-    resendButtonText: {
-        color: '#4A90E2',
-        fontSize: 14,
-    },
-    backButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 16,
-    },
-    backButtonText: {
-        color: '#4A90E2',
-        fontSize: 14,
-        marginLeft: 8,
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: c.background,
+            justifyContent: 'center',
+            padding: 20,
+        },
+        logoContainer: {
+            alignItems: 'center',
+            marginBottom: 32,
+        },
+        iconCircle: {
+            width: 100,
+            height: 100,
+            borderRadius: 50,
+            backgroundColor: c.primarySoft,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 24,
+        },
+        title: {
+            marginBottom: 12,
+        },
+        subtitle: {
+            textAlign: 'center',
+            paddingHorizontal: 20,
+        },
+        formContainer: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 24,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.md,
+        },
+        inputContainer: {
+            marginBottom: 20,
+        },
+        label: {
+            marginBottom: 8,
+            color: c.text,
+        },
+        inputWrapper: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.surfaceSunken,
+            borderRadius: r.md,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        inputIcon: {
+            paddingLeft: 16,
+        },
+        input: {
+            flex: 1,
+            padding: 16,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        eyeButton: {
+            padding: 12,
+        },
+        resetButton: {
+            marginTop: 8,
+        },
+        resendButton: {
+            alignItems: 'center',
+            marginTop: 16,
+        },
+        backButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 16,
+        },
+        backButtonText: {
+            marginLeft: 8,
+        },
+    });
+};
 
 export default ResetPasswordScreen;

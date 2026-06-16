@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
-import { useEffect, useState } from 'react';
-import { Alert, FlatList, Image, Modal, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { FlatList, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
+import { Toggle } from '../../../components/ui/Toggle';
 import EmptyStateCard from '../../../components/EmptyStateCard';
 import SkeletonLoader from '../../../components/SkeletonLoader';
 import { ENDPOINTS } from '../../../constants/ApiConstants';
 import ApiHelper from '../../../services/ApiHelper';
+import { useTheme } from '../../../theme/ThemeProvider';
 
 import CustomTimePicker from '../../../components/CustomTimePicker';
 
@@ -40,6 +43,10 @@ const PatientDetailsScreen = () => {
     });
     const [medicationPickerVisible, setMedicationPickerVisible] = useState(false);
 
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
+
     useEffect(() => {
         fetchData();
         fetchUser();
@@ -53,8 +60,10 @@ const PatientDetailsScreen = () => {
         }
     };
 
-    const fetchData = async () => {
-        setLoading(true);
+    const fetchData = async ({ silent = false } = {}) => {
+        // silent refresh keeps the current list on screen instead of dropping
+        // back to the full-page skeleton (avoids the whole screen "refreshing").
+        if (!silent) setLoading(true);
         try {
             const [patientRes, medRes, scheduleRes, historyRes] = await Promise.all([
                 ApiHelper.get(`${ENDPOINTS.PATIENTS}/${id}`),
@@ -72,7 +81,7 @@ const PatientDetailsScreen = () => {
             console.error("Error fetching data:", error);
             Alert.alert("Error", "Failed to load patient data.");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -105,7 +114,7 @@ const PatientDetailsScreen = () => {
                 schedule_type: 'daily',
                 days_of_week: [0, 1, 2, 3, 4, 5, 6]
             });
-            fetchData(); // Refresh
+            fetchData({ silent: true }); // Refresh list in place (no full-screen reload)
             Alert.alert("Success", "Schedule added successfully.");
         } catch (error) {
             console.error("Error adding schedule:", error);
@@ -125,7 +134,8 @@ const PatientDetailsScreen = () => {
                     onPress: async () => {
                         try {
                             await ApiHelper.delete(`${ENDPOINTS.MEDICATIONS.SCHEDULES}/${scheduleId}`);
-                            fetchData(); // Refresh
+                            // Remove from local state so the list updates without reloading the whole screen.
+                            setSchedules(prev => prev.filter(s => s.id !== scheduleId));
                         } catch (error) {
                             Alert.alert("Error", "Failed to delete schedule.");
                         }
@@ -147,7 +157,10 @@ const PatientDetailsScreen = () => {
                     onPress: async () => {
                         try {
                             await ApiHelper.delete(`${ENDPOINTS.MEDICATIONS.BASE}/${medicationId}`);
-                            fetchData(); // Refresh
+                            // Remove the medication and its schedules locally (deleting a
+                            // medication cascades to its schedules) without a full reload.
+                            setMedications(prev => prev.filter(m => m.id !== medicationId));
+                            setSchedules(prev => prev.filter(s => s.medication_id !== medicationId));
                         } catch (error) {
                             Alert.alert("Error", "Failed to delete medication.");
                         }
@@ -171,7 +184,7 @@ const PatientDetailsScreen = () => {
             await ApiHelper.post(ENDPOINTS.MEDICATIONS.BASE, payload);
             setAddMedModalVisible(false);
             setNewMedication({ medicine_name: '', dosage: '', form: '', instructions: '' });
-            fetchData(); // Refresh
+            fetchData({ silent: true }); // Refresh list in place (no full-screen reload)
             Alert.alert("Success", "Medication added successfully.");
         } catch (error) {
             console.error("Error adding medication:", error);
@@ -182,7 +195,10 @@ const PatientDetailsScreen = () => {
     const handleToggleActive = async (medication) => {
         try {
             await ApiHelper.put(`${ENDPOINTS.MEDICATIONS.BASE}/${medication.id}`, { is_active: !medication.is_active });
-            fetchData(); // Refresh list
+            // Update just this medication in place instead of reloading the whole screen.
+            setMedications(prev => prev.map(m => (
+                m.id === medication.id ? { ...m, is_active: !m.is_active } : m
+            )));
         } catch (error) {
             console.error("Error toggling medication status:", error);
             Alert.alert("Error", "Failed to update medication status.");
@@ -200,7 +216,7 @@ const PatientDetailsScreen = () => {
     const renderHeader = () => (
         <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color="#333" />
+                <Ionicons name="arrow-back" size={24} color={colors.text} />
             </TouchableOpacity>
             {patient && (
                 <TouchableOpacity style={styles.profileInfo} onPress={() => setActiveTab('Details')}>
@@ -240,15 +256,12 @@ const PatientDetailsScreen = () => {
                     <Text style={styles.subText}>{item.instructions}</Text>
                 </View>
                 <View style={styles.actions}>
-                    <Switch
-                        trackColor={{ false: "#767577", true: "#81b0ff" }}
-                        thumbColor={item.is_active ? "#2D9CDB" : "#f4f3f4"}
-                        ios_backgroundColor="#3e3e3e"
-                        onValueChange={() => handleToggleActive(item)}
+                    <Toggle
                         value={item.is_active}
+                        onValueChange={() => handleToggleActive(item)}
                     />
                     <TouchableOpacity onPress={() => handleDeleteMedication(item.id)} style={styles.deleteBtn}>
-                        <Ionicons name="trash-outline" size={20} color="#EB5757" />
+                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -259,7 +272,7 @@ const PatientDetailsScreen = () => {
         <View style={styles.card}>
             <View style={styles.cardRow}>
                 <View style={styles.timeContainer}>
-                    <Ionicons name="time-outline" size={20} color="#333" />
+                    <Ionicons name="time-outline" size={20} color={colors.primary} />
                     <Text style={styles.timeText}>{item.time_of_day}</Text>
                 </View>
                 <View style={styles.medInfo}>
@@ -271,16 +284,16 @@ const PatientDetailsScreen = () => {
                     </View>
                 </View>
                 <TouchableOpacity onPress={() => handleDeleteSchedule(item.id)}>
-                    <Ionicons name="ellipsis-vertical" size={20} color="#666" />
+                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
             </View>
         </View>
     );
 
     const renderHistoryItem = ({ item }) => {
-        let statusColor = '#999';
-        if (item.status === 'taken') statusColor = '#27AE60';
-        if (item.status === 'missed') statusColor = '#EB5757';
+        let statusColor = colors.textMuted;
+        if (item.status === 'taken') statusColor = colors.success;
+        if (item.status === 'missed') statusColor = colors.danger;
 
         return (
             <View style={[styles.card, { borderLeftWidth: 4, borderLeftColor: statusColor }]}>
@@ -395,7 +408,7 @@ const PatientDetailsScreen = () => {
                                 ? medications.find(m => m.id === newSchedule.medication_id)?.medicine_name || 'Select Medication'
                                 : 'Select Medication'}
                         </Text>
-                        <Ionicons name="chevron-down" size={20} color="#666" />
+                        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
 
                     <Text style={styles.label}>Frequency</Text>
@@ -471,7 +484,7 @@ const PatientDetailsScreen = () => {
                                 return `${hour}:${m} ${ampm}`;
                             })() : 'Select Time'}
                         </Text>
-                        <Ionicons name="time-outline" size={20} color="#666" />
+                        <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
                     </TouchableOpacity>
 
                     <CustomTimePicker
@@ -514,7 +527,7 @@ const PatientDetailsScreen = () => {
                                     }}
                                 >
                                     <Text style={styles.pickerItemText}>{item.medicine_name} ({item.dosage})</Text>
-                                    {newSchedule.medication_id === item.id && <Ionicons name="checkmark" size={20} color="#2D9CDB" />}
+                                    {newSchedule.medication_id === item.id && <Ionicons name="checkmark" size={20} color={colors.primary} />}
                                 </TouchableOpacity>
                             )}
                         />
@@ -582,7 +595,7 @@ const PatientDetailsScreen = () => {
                             <Text style={styles.sectionTitle}>Medications</Text>
                             <View style={styles.headerActions}>
                                 <TouchableOpacity onPress={() => setSortByActive(!sortByActive)} style={styles.sortButton}>
-                                    <Ionicons name="filter" size={20} color={sortByActive ? "#2D9CDB" : "#666"} />
+                                    <Ionicons name="filter" size={20} color={sortByActive ? colors.primary : colors.textSecondary} />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.addButton} onPress={() => setAddMedModalVisible(true)}>
                                     <Ionicons name="add" size={20} color="#FFF" />
@@ -655,10 +668,15 @@ const PatientDetailsScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F5F7FA',
+        backgroundColor: c.background,
     },
     center: {
         flex: 1,
@@ -669,8 +687,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 20,
-        backgroundColor: '#FFF',
+        backgroundColor: c.surface,
         paddingTop: 60, // For status bar
+        borderBottomWidth: 1,
+        borderBottomColor: c.border,
     },
     backButton: {
         marginRight: 16,
@@ -684,44 +704,41 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         marginRight: 12,
-        backgroundColor: '#E1E4E8',
+        backgroundColor: c.surfaceAlt,
     },
     name: {
         fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
+        fontFamily: f.bold,
+        color: c.text,
     },
     age: {
         fontSize: 14,
-        color: '#666',
+        fontFamily: f.regular,
+        color: c.textSecondary,
     },
     tabContainer: {
         flexDirection: 'row',
-        backgroundColor: '#E1E4E8',
+        backgroundColor: c.surfaceAlt,
         padding: 4,
         margin: 16,
-        borderRadius: 8,
+        borderRadius: r.md,
     },
     tab: {
         flex: 1,
         paddingVertical: 8,
         alignItems: 'center',
-        borderRadius: 6,
+        borderRadius: r.sm,
     },
     activeTab: {
-        backgroundColor: '#FFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 1,
+        backgroundColor: c.surface,
+        ...sh.sm,
     },
     tabText: {
-        color: '#666',
-        fontWeight: '600',
+        color: c.textSecondary,
+        fontFamily: f.semibold,
     },
     activeTabText: {
-        color: '#333',
+        color: c.text,
     },
     content: {
         flex: 1,
@@ -735,32 +752,33 @@ const styles = StyleSheet.create({
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
+        fontFamily: f.bold,
+        color: c.text,
     },
     addButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#2D9CDB',
+        backgroundColor: c.primary,
         paddingHorizontal: 12,
         paddingVertical: 8,
-        borderRadius: 6,
+        borderRadius: r.md,
     },
     addButtonText: {
-        color: '#FFF',
-        fontWeight: '600',
+        color: '#FFFFFF',
+        fontFamily: f.semibold,
         marginLeft: 4,
     },
     list: {
         paddingBottom: 20,
     },
     card: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
+        backgroundColor: c.surface,
+        borderRadius: r.lg,
         padding: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: '#E1E4E8',
+        borderColor: c.border,
+        ...sh.sm,
     },
     cardRow: {
         flexDirection: 'row',
@@ -770,68 +788,73 @@ const styles = StyleSheet.create({
     timeContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F0F4F8',
+        backgroundColor: c.primarySoft,
         padding: 8,
-        borderRadius: 20,
+        borderRadius: r.pill,
         marginRight: 12,
     },
     timeText: {
         marginLeft: 4,
-        fontWeight: 'bold',
-        color: '#333',
+        fontFamily: f.bold,
+        color: c.primary,
     },
     medInfo: {
         flex: 1,
     },
     medName: {
         fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
+        fontFamily: f.semibold,
+        color: c.text,
     },
     badge: {
-        backgroundColor: '#E1E4E8',
+        backgroundColor: c.surfaceAlt,
         alignSelf: 'flex-start',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: r.sm,
         marginTop: 4,
     },
     badgeText: {
         fontSize: 10,
-        color: '#555',
+        fontFamily: f.semibold,
+        color: c.textSecondary,
     },
     subText: {
         fontSize: 12,
-        color: '#888',
+        fontFamily: f.regular,
+        color: c.textMuted,
         marginTop: 2,
     },
     statusBadge: {
         paddingHorizontal: 8,
         paddingVertical: 4,
-        borderRadius: 6,
+        borderRadius: r.sm,
     },
     statusText: {
         fontSize: 12,
-        fontWeight: 'bold',
+        fontFamily: f.bold,
     },
     detailsContainer: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
+        backgroundColor: c.surface,
+        borderRadius: r.lg,
         padding: 16,
         borderWidth: 1,
-        borderColor: '#E1E4E8',
+        borderColor: c.border,
+        ...sh.sm,
     },
     detailRow: {
         marginBottom: 12,
     },
     detailLabel: {
         fontSize: 14,
-        color: '#888',
+        fontFamily: f.regular,
+        color: c.textMuted,
         marginBottom: 2,
     },
     detailValue: {
         fontSize: 16,
-        color: '#333',
+        fontFamily: f.medium,
+        color: c.text,
     },
     emptyContainer: {
         alignItems: 'center',
@@ -841,41 +864,43 @@ const styles = StyleSheet.create({
     emptyText: {
         marginTop: 12,
         fontSize: 16,
-        color: '#888',
+        color: c.textMuted,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: c.overlay,
         justifyContent: 'center',
         padding: 20,
     },
     modalContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
+        backgroundColor: c.surface,
+        borderRadius: r.xl,
         padding: 20,
-        elevation: 5,
+        ...sh.lg,
     },
     modalTitle: {
         fontSize: 20,
-        fontWeight: 'bold',
+        fontFamily: f.bold,
         marginBottom: 20,
-        color: '#333',
+        color: c.text,
         textAlign: 'center',
     },
     label: {
         fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
+        fontFamily: f.semibold,
+        color: c.text,
         marginBottom: 6,
         marginTop: 10,
     },
     input: {
         borderWidth: 1,
-        borderColor: '#E1E4E8',
-        borderRadius: 8,
+        borderColor: c.border,
+        borderRadius: r.md,
         padding: 12,
         fontSize: 16,
-        backgroundColor: '#F9FAFB',
+        fontFamily: f.regular,
+        color: c.text,
+        backgroundColor: c.surfaceSunken,
     },
     modalButtons: {
         flexDirection: 'row',
@@ -885,33 +910,33 @@ const styles = StyleSheet.create({
     modalButton: {
         flex: 1,
         padding: 14,
-        borderRadius: 8,
+        borderRadius: r.md,
         alignItems: 'center',
     },
     cancelButton: {
-        backgroundColor: '#F0F4F8',
+        backgroundColor: c.surfaceAlt,
         marginRight: 10,
     },
     saveButton: {
-        backgroundColor: '#2D9CDB',
+        backgroundColor: c.primary,
         marginLeft: 10,
     },
     cancelButtonText: {
-        color: '#666',
-        fontWeight: '600',
+        color: c.textSecondary,
+        fontFamily: f.semibold,
         fontSize: 16,
     },
     saveButtonText: {
-        color: '#FFF',
-        fontWeight: '600',
+        color: '#FFFFFF',
+        fontFamily: f.semibold,
         fontSize: 16,
     },
     inactiveCard: {
-        opacity: 0.7,
-        backgroundColor: '#F9FAFB',
+        opacity: 0.6,
+        backgroundColor: c.surfaceSunken,
     },
     inactiveText: {
-        color: '#999',
+        color: c.textMuted,
         textDecorationLine: 'line-through',
     },
     actions: {
@@ -931,37 +956,39 @@ const styles = StyleSheet.create({
     },
     dropdownButton: {
         borderWidth: 1,
-        borderColor: '#E1E4E8',
-        borderRadius: 8,
+        borderColor: c.border,
+        borderRadius: r.md,
         padding: 12,
-        backgroundColor: '#F9FAFB',
+        backgroundColor: c.surfaceSunken,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
     dropdownButtonText: {
         fontSize: 16,
-        color: '#333',
+        fontFamily: f.regular,
+        color: c.text,
     },
     pickerContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
+        backgroundColor: c.surface,
+        borderRadius: r.xl,
         padding: 20,
-        elevation: 5,
+        ...sh.lg,
         maxHeight: '80%',
         width: '100%',
     },
     pickerItem: {
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#F0F0F0',
+        borderBottomColor: c.border,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
     pickerItemText: {
         fontSize: 16,
-        color: '#333',
+        fontFamily: f.regular,
+        color: c.text,
     },
     closePickerButton: {
         marginTop: 16,
@@ -969,9 +996,9 @@ const styles = StyleSheet.create({
         padding: 12,
     },
     closePickerText: {
-        color: '#EB5757',
+        color: c.danger,
         fontSize: 16,
-        fontWeight: 'bold',
+        fontFamily: f.bold,
     },
     frequencyContainer: {
         flexDirection: 'row',
@@ -983,23 +1010,23 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 10,
         paddingHorizontal: 4,
-        borderRadius: 8,
+        borderRadius: r.md,
         borderWidth: 1,
-        borderColor: '#E1E4E8',
+        borderColor: c.border,
         alignItems: 'center',
-        backgroundColor: '#FFF',
+        backgroundColor: c.surface,
     },
     frequencyButtonActive: {
-        backgroundColor: '#E3F2FD',
-        borderColor: '#2D9CDB',
+        backgroundColor: c.primarySoft,
+        borderColor: c.primary,
     },
     frequencyButtonText: {
         fontSize: 12,
-        fontWeight: '600',
-        color: '#666',
+        fontFamily: f.semibold,
+        color: c.textSecondary,
     },
     frequencyButtonTextActive: {
-        color: '#2D9CDB',
+        color: c.primary,
     },
     daysContainer: {
         flexDirection: 'row',
@@ -1012,21 +1039,22 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#F0F4F8',
+        backgroundColor: c.surfaceAlt,
         borderWidth: 1,
         borderColor: 'transparent',
     },
     dayButtonActive: {
-        backgroundColor: '#2D9CDB',
+        backgroundColor: c.primary,
     },
     dayButtonText: {
         fontSize: 14,
-        fontWeight: '600',
-        color: '#666',
+        fontFamily: f.semibold,
+        color: c.textSecondary,
     },
     dayButtonTextActive: {
-        color: '#FFF',
+        color: '#FFFFFF',
     },
-});
+    });
+};
 
 export default PatientDetailsScreen;

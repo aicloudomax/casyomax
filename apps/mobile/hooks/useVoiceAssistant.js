@@ -1,5 +1,6 @@
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import AzureService from '../services/AzureService';
 
@@ -46,14 +47,18 @@ export const useVoiceAssistant = () => {
             const audioUri = await AzureService.synthesizeSpeech(text);
             console.log("🎵 Audio URI:", audioUri);
 
-            // Verify file exists
-            const fileInfo = await FileSystem.getInfoAsync(audioUri);
+            // On web the URI is an in-memory object URL that can't be stat'd;
+            // expo-file-system isn't available either, so play it directly.
+            if (Platform.OS !== 'web') {
+                // Verify file exists
+                const fileInfo = await FileSystem.getInfoAsync(audioUri);
 
-            if (!fileInfo.exists) {
-                console.warn("Audio file not found at URI, skipping playback");
-                setIsSpeaking(false);
-                if (onComplete) onComplete();
-                return;
+                if (!fileInfo.exists) {
+                    console.warn("Audio file not found at URI, skipping playback");
+                    setIsSpeaking(false);
+                    if (onComplete) onComplete();
+                    return;
+                }
             }
 
             // Unload previous sound if any

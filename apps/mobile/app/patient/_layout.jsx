@@ -1,13 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable } from 'react-native';
+import { Avatar } from '../../components/ui/Avatar';
+import { useTheme } from '../../theme/ThemeProvider';
 
 export default function PatientLayout() {
     const router = useRouter();
-    const [profileImage, setProfileImage] = useState(null);
-    const [initials, setInitials] = useState('');
+    const { colors, fonts } = useTheme();
+    const [user, setUser] = useState(null);
 
     useEffect(() => {
         fetchUserData();
@@ -17,38 +18,32 @@ export default function PatientLayout() {
         try {
             const userDataStr = await SecureStore.getItemAsync('userData');
             if (userDataStr) {
-                const userData = JSON.parse(userDataStr);
-                if (userData.profile_image_url) {
-                    setProfileImage(userData.profile_image_url);
-                } else {
-                    const first = userData.first_name ? userData.first_name[0] : '';
-                    const last = userData.last_name ? userData.last_name[0] : '';
-                    setInitials((first + last).toUpperCase());
-                }
+                setUser(JSON.parse(userDataStr));
             }
         } catch (error) {
-            console.log("Error fetching user data for layout:", error);
+            console.log('Error fetching user data for layout:', error);
         }
     };
 
+    const name = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Me';
+
     return (
-        <Stack>
+        <Stack
+            screenOptions={{
+                headerStyle: { backgroundColor: colors.surface },
+                headerTitleStyle: { fontFamily: fonts.bold, color: colors.text },
+                headerTintColor: colors.text,
+                headerShadowVisible: false,
+            }}
+        >
             <Stack.Screen
                 name="home"
                 options={{
                     title: 'Casyomax Chat',
                     headerRight: () => (
-                        <TouchableOpacity onPress={() => router.push('/patient/profile')} style={styles.profileButton}>
-                            {profileImage ? (
-                                <Image source={{ uri: profileImage }} style={styles.avatar} />
-                            ) : initials ? (
-                                <View style={styles.initialsContainer}>
-                                    <Text style={styles.initialsText}>{initials}</Text>
-                                </View>
-                            ) : (
-                                <Ionicons name="person-circle-outline" size={30} color="#4A90E2" />
-                            )}
-                        </TouchableOpacity>
+                        <Pressable onPress={() => router.push('/patient/profile')} hitSlop={8} style={{ marginRight: 12 }}>
+                            <Avatar uri={user?.profile_image_url} name={name} size={34} />
+                        </Pressable>
                     ),
                 }}
             />
@@ -56,27 +51,3 @@ export default function PatientLayout() {
         </Stack>
     );
 }
-
-const styles = StyleSheet.create({
-    profileButton: {
-        marginRight: 10,
-    },
-    avatar: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-    },
-    initialsContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#4A90E2',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    initialsText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-});

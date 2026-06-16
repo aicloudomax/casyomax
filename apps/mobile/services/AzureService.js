@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import * as SecureStore from '@/services/SecureStore';
 import { API_BASE_URL, ENDPOINTS } from '../constants/ApiConstants';
 
@@ -37,7 +38,13 @@ const AzureService = {
 
             const blob = await fetchResponse.blob();
 
-            // Convert blob to base64 to write to file
+            // On web, expo-file-system is unavailable. Play straight from an
+            // in-memory object URL instead of writing to a local file.
+            if (Platform.OS === 'web') {
+                return URL.createObjectURL(blob);
+            }
+
+            // Native: convert blob to base64 and write to a file, return its URI.
             const reader = new FileReader();
             return new Promise((resolve, reject) => {
                 reader.onloadend = async () => {
@@ -73,11 +80,23 @@ const AzureService = {
             }
 
             const formData = new FormData();
-            formData.append('audio', {
-                uri: audioUri,
-                type: 'audio/m4a', // Expo records as m4a/aac by default on Android
-                name: 'recording.m4a',
-            });
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            if (Platform.OS === 'web') {
+                // On web the recording URI is a blob: URL. Fetch it into a real Blob
+                // and let the browser set the multipart boundary (don't set Content-Type).
+                const audioBlob = await (await fetch(audioUri)).blob();
+                const ext = audioBlob.type.includes('webm') ? 'webm'
+                    : audioBlob.type.includes('wav') ? 'wav' : 'm4a';
+                formData.append('audio', audioBlob, `recording.${ext}`);
+            } else {
+                formData.append('audio', {
+                    uri: audioUri,
+                    type: 'audio/m4a', // Expo records as m4a/aac by default on Android
+                    name: 'recording.m4a',
+                });
+                headers['Content-Type'] = 'multipart/form-data';
+            }
 
             const url = `${API_BASE_URL}${ENDPOINTS.VOICE.TRANSCRIBE}`;
             console.log(`🔹 Uploading audio to: ${url}`);
@@ -85,10 +104,7 @@ const AzureService = {
             const response = await fetch(url, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    'Authorization': `Bearer ${token}`,
-                },
+                headers,
             });
 
             if (!response.ok) {

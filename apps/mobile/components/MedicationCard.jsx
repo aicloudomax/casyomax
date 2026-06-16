@@ -1,7 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
 import { useVoiceAssistant } from '../hooks/useVoiceAssistant';
+import { useTheme } from '../theme/ThemeProvider';
+import { AppText } from './ui/AppText';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
 
 const MedicationCard = ({ medicationName, dosage, time, status, isActive, onVoiceDone, onAction }) => {
     const {
@@ -14,6 +20,10 @@ const MedicationCard = ({ medicationName, dosage, time, status, isActive, onVoic
         stopListening,
         processCommand
     } = useVoiceAssistant();
+
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
 
     const timeoutRef = useRef(null);
 
@@ -114,240 +124,182 @@ const MedicationCard = ({ medicationName, dosage, time, status, isActive, onVoic
     const getStatusConfig = (status) => {
         switch (status) {
             case 'taken':
-                return { icon: 'checkmark-circle', color: '#27AE60', bg: '#E8F5E9', text: 'Taken' };
+                return { icon: 'checkmark-circle', tone: 'success', text: 'Taken' };
             case 'missed':
-                return { icon: 'close-circle', color: '#EB5757', bg: '#FFEBEE', text: 'Missed' };
+                return { icon: 'close-circle', tone: 'danger', text: 'Missed' };
             case 'snoozed':
-                return { icon: 'time', color: '#F2994A', bg: '#FFF3E0', text: 'Snoozed' };
+                return { icon: 'time', tone: 'warning', text: 'Snoozed' };
             default:
-                return { icon: 'help-circle', color: '#999', bg: '#F5F5F5', text: status };
+                return { icon: 'help-circle', tone: 'neutral', text: status };
         }
     };
 
     const statusConfig = status && status !== 'pending' ? getStatusConfig(status) : null;
 
     return (
-        <View style={styles.cardContainer}>
+        <Card padded={false} elevation="sm" style={styles.cardContainer}>
             <View style={styles.header}>
                 <View style={styles.headerTop}>
-                    <Text style={[styles.headerTitle, status === 'taken' && { color: '#27AE60' }]}>
+                    <AppText
+                        variant="subtitle"
+                        weight="bold"
+                        color={status === 'taken' ? 'success' : 'text'}
+                        style={styles.headerTitle}
+                    >
                         {status === 'taken' ? "Medication Taken" : (status === 'missed' ? "Medication Missed" : "Time for your medicine!")}
-                    </Text>
+                    </AppText>
                     {(!status || status === 'pending') && (
                         <View style={styles.voiceStatus}>
-                            {isSpeaking && <Ionicons name="volume-high" size={20} color="#2D9CDB" />}
-                            {isListening && <ActivityIndicator size="small" color="#EB5757" />}
-                            {isProcessing && <ActivityIndicator size="small" color="#F2994A" />}
+                            {isSpeaking && <Ionicons name="volume-high" size={20} color={colors.primary} />}
+                            {isListening && <ActivityIndicator size="small" color={colors.danger} />}
+                            {isProcessing && <ActivityIndicator size="small" color={colors.warning} />}
                         </View>
                     )}
                 </View>
-                <Text style={styles.headerSubtitle}>
+                <AppText variant="body" color="textSecondary" style={styles.headerSubtitle}>
                     {status === 'taken'
                         ? "You have marked this medication as taken."
                         : "It's time to take the following medications. Please confirm each one."}
-                </Text>
-                {transcript ? <Text style={styles.transcriptText}>"{transcript}"</Text> : null}
+                </AppText>
+                {transcript ? <AppText variant="caption" color="primary" style={styles.transcriptText}>"{transcript}"</AppText> : null}
             </View>
 
             <View style={styles.medicationRow}>
                 <View style={styles.medicationInfo}>
-                    <Text style={styles.medicationName}>
-                        {medicationName} <Text style={styles.dosage}>({dosage})</Text>
-                    </Text>
+                    <AppText variant="subtitle" weight="bold" style={styles.medicationName}>
+                        {medicationName} <AppText variant="subtitle" weight="regular" color="textSecondary">({dosage})</AppText>
+                    </AppText>
                     <View style={styles.timeBadge}>
-                        <Text style={styles.timeText}>{time}</Text>
+                        <AppText variant="caption" weight="bold" color="textSecondary">{time}</AppText>
                     </View>
                 </View>
 
                 {!status || status === 'pending' ? (
                     <View style={styles.actionButtons}>
-                        <TouchableOpacity
-                            style={[styles.button, styles.takenButton]}
+                        <Button
+                            title="Yes"
+                            icon="thumbs-up-outline"
+                            variant="secondary"
+                            size="sm"
+                            color={colors.success}
                             onPress={() => onAction('taken')}
-                        >
-                            <Ionicons name="thumbs-up-outline" size={18} color="#27AE60" />
-                            <Text style={[styles.buttonText, styles.takenText]}>Yes</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.button, styles.missedButton]}
+                            style={styles.flexBtn}
+                        />
+                        <Button
+                            title="No"
+                            icon="thumbs-down-outline"
+                            variant="secondary"
+                            size="sm"
+                            color={colors.danger}
                             onPress={() => onAction('missed')}
-                        >
-                            <Ionicons name="thumbs-down-outline" size={18} color="#EB5757" />
-                            <Text style={[styles.buttonText, styles.missedText]}>No</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.button, styles.snoozeButton]}
+                            style={styles.flexBtn}
+                        />
+                        <Button
+                            title="Later"
+                            icon="time-outline"
+                            variant="secondary"
+                            size="sm"
+                            color={colors.textSecondary}
                             onPress={() => onAction('snooze')}
-                        >
-                            <Ionicons name="time-outline" size={18} color="#333" />
-                            <Text style={[styles.buttonText, styles.snoozeText]}>Later</Text>
-                        </TouchableOpacity>
+                            style={styles.flexBtn}
+                        />
 
                         <TouchableOpacity
                             style={[styles.micButton, isListening && styles.micButtonActive]}
                             onPress={handleMicPress}
                         >
-                            <Ionicons name={isListening ? "mic" : "mic-outline"} size={20} color={isListening ? "#FFF" : "#333"} />
+                            <Ionicons name={isListening ? "mic" : "mic-outline"} size={20} color={isListening ? "#FFF" : colors.text} />
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <View style={[styles.statusContainer, { backgroundColor: statusConfig.bg }]}>
-                        <Ionicons name={statusConfig.icon} size={18} color={statusConfig.color} />
-                        <Text style={[styles.statusText, { color: statusConfig.color }]}>
-                            {statusConfig.text}
-                        </Text>
-                    </View>
+                    <Badge label={statusConfig.text} tone={statusConfig.tone} dot />
                 )}
             </View>
-        </View>
+        </Card>
     );
 };
 
-const styles = StyleSheet.create({
-    cardContainer: {
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    header: {
-        marginBottom: 16,
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#000',
-        marginBottom: 4,
-    },
-    headerSubtitle: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 20,
-    },
-    medicationRow: {
-        backgroundColor: '#F0F4F8', // Light blue-gray
-        borderRadius: 8,
-        padding: 16,
-    },
-    medicationInfo: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    medicationName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#000',
-    },
-    dosage: {
-        fontWeight: 'normal',
-        color: '#555',
-    },
-    timeBadge: {
-        backgroundColor: '#E1E4E8',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    timeText: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    actionButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 8,
-    },
-    button: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        flex: 1,
-    },
-    buttonText: {
-        marginLeft: 6,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    takenButton: {
-        borderColor: '#27AE60',
-        backgroundColor: '#F0F9F4',
-    },
-    takenText: {
-        color: '#27AE60',
-    },
-    missedButton: {
-        borderColor: '#EB5757',
-        backgroundColor: '#FEF2F2',
-    },
-    missedText: {
-        color: '#EB5757',
-    },
-    snoozeButton: {
-        borderColor: '#E1E4E8',
-        backgroundColor: '#FFF',
-    },
-    snoozeText: {
-        color: '#333',
-    },
-    statusContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 8,
-        alignSelf: 'flex-start',
-    },
-    statusText: {
-        marginLeft: 6,
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    headerTop: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 4,
-    },
-    voiceStatus: {
-        flexDirection: 'row',
-        gap: 8,
-    },
-    transcriptText: {
-        fontSize: 12,
-        color: '#2D9CDB',
-        fontStyle: 'italic',
-        marginTop: 4,
-    },
-    micButton: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 10,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-        backgroundColor: '#FFF',
-    },
-    micButtonActive: {
-        backgroundColor: '#EB5757',
-        borderColor: '#EB5757',
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        cardContainer: {
+            padding: 16,
+            marginBottom: 16,
+            width: '100%',
+        },
+        header: {
+            marginBottom: 16,
+        },
+        headerTitle: {
+            marginBottom: 4,
+        },
+        headerSubtitle: {
+            lineHeight: 20,
+        },
+        medicationRow: {
+            backgroundColor: c.surfaceAlt,
+            borderRadius: r.md,
+            padding: 16,
+        },
+        medicationInfo: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16,
+        },
+        medicationName: {
+            color: c.text,
+            flexShrink: 1,
+        },
+        timeBadge: {
+            backgroundColor: c.surfaceSunken,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
+            borderRadius: r.sm,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        actionButtons: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: 8,
+        },
+        flexBtn: {
+            flex: 1,
+            alignSelf: 'stretch',
+        },
+        transcriptText: {
+            fontStyle: 'italic',
+            marginTop: 4,
+        },
+        headerTop: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 4,
+        },
+        voiceStatus: {
+            flexDirection: 'row',
+            gap: 8,
+        },
+        micButton: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 10,
+            borderRadius: r.md,
+            borderWidth: 1,
+            borderColor: c.border,
+            backgroundColor: c.surface,
+        },
+        micButtonActive: {
+            backgroundColor: c.danger,
+            borderColor: c.danger,
+        },
+    });
+};
 
 export default MedicationCard;

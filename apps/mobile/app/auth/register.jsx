@@ -1,14 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
     ScrollView,
     StyleSheet,
-    Text,
     TextInput,
     TouchableOpacity,
     View
@@ -17,9 +15,15 @@ import Toast from 'react-native-toast-message';
 import { ENDPOINTS } from '../../constants/ApiConstants';
 import ApiHelper from '../../services/ApiHelper';
 import { login } from '../../services/AuthService';
+import { useTheme } from '../../theme/ThemeProvider';
+import { AppText } from '../../components/ui/AppText';
+import { Button } from '../../components/ui/Button';
 
 export default function RegisterScreen() {
     const router = useRouter();
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         first_name: '',
@@ -27,10 +31,16 @@ export default function RegisterScreen() {
         email: '',
         phone: '',
         password: '',
-        role: 'Patient', // Default role
+        role: 'patient', // Default role (value sent to backend)
     });
 
-    const roles = ['Patient', 'Caregiver', 'Guardian']; // Exclude Admin for public registration? Or allow? Assuming mainly public roles.
+    // label = what the user sees, value = what the backend stores.
+    // "Caretaker" is the display term; the backend role stays "caregiver".
+    const roles = [
+        { label: 'Patient', value: 'patient' },
+        { label: 'Caretaker', value: 'caregiver' },
+        { label: 'Guardian', value: 'guardian' },
+    ];
 
     const handleChange = (name, value) => {
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -75,9 +85,6 @@ export default function RegisterScreen() {
                 if (userRole === 'admin') {
                     router.replace('/admin/home');
                 } else if (userRole === 'caregiver' || userRole === 'caretaker') {
-                    // Handle both terminologies if unsure, assuming 'caregiver' from previous context but login uses 'caretaker'
-                    // Let's check ROLES constant in next step if possible, but safe to check string.
-                    // Login checks ROLES.CARETAKER.
                     router.replace('/caretaker/home');
                 } else if (userRole === 'patient') {
                     router.replace('/patient/home');
@@ -114,31 +121,33 @@ export default function RegisterScreen() {
             >
                 <ScrollView contentContainerStyle={styles.scrollContent}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
+                        <Ionicons name="arrow-back" size={24} color={colors.text} />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Text style={styles.title}>Create Account</Text>
-                        <Text style={styles.subtitle}>Sign up to get started with Casyomax</Text>
+                        <AppText variant="displayLg" style={styles.title}>Create Account</AppText>
+                        <AppText variant="bodyLg" color="textSecondary">Sign up to get started with Casyomax</AppText>
                     </View>
 
                     <View style={styles.form}>
                         {/* Name Fields Row */}
                         <View style={styles.row}>
                             <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                                <Text style={styles.label}>First Name</Text>
+                                <AppText variant="label" style={styles.label}>First Name</AppText>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="John"
+                                    placeholderTextColor={colors.textMuted}
                                     value={formData.first_name}
                                     onChangeText={(text) => handleChange('first_name', text)}
                                 />
                             </View>
                             <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                                <Text style={styles.label}>Last Name</Text>
+                                <AppText variant="label" style={styles.label}>Last Name</AppText>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Doe"
+                                    placeholderTextColor={colors.textMuted}
                                     value={formData.last_name}
                                     onChangeText={(text) => handleChange('last_name', text)}
                                 />
@@ -146,10 +155,11 @@ export default function RegisterScreen() {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Email</Text>
+                            <AppText variant="label" style={styles.label}>Email</AppText>
                             <TextInput
                                 style={styles.input}
                                 placeholder="john.doe@example.com"
+                                placeholderTextColor={colors.textMuted}
                                 value={formData.email}
                                 onChangeText={(text) => handleChange('email', text)}
                                 autoCapitalize="none"
@@ -158,10 +168,11 @@ export default function RegisterScreen() {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Phone (Optional)</Text>
+                            <AppText variant="label" style={styles.label}>Phone (Optional)</AppText>
                             <TextInput
                                 style={styles.input}
                                 placeholder="+1 234 567 8900"
+                                placeholderTextColor={colors.textMuted}
                                 value={formData.phone}
                                 onChangeText={(text) => handleChange('phone', text)}
                                 keyboardType="phone-pad"
@@ -169,10 +180,11 @@ export default function RegisterScreen() {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
+                            <AppText variant="label" style={styles.label}>Password</AppText>
                             <TextInput
                                 style={styles.input}
                                 placeholder="********"
+                                placeholderTextColor={colors.textMuted}
                                 value={formData.password}
                                 onChangeText={(text) => handleChange('password', text)}
                                 secureTextEntry
@@ -180,42 +192,43 @@ export default function RegisterScreen() {
                         </View>
 
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>I am a...</Text>
+                            <AppText variant="label" style={styles.label}>I am a...</AppText>
                             <View style={styles.roleContainer}>
                                 {roles.map((r) => (
                                     <TouchableOpacity
-                                        key={r}
+                                        key={r.value}
                                         style={[
                                             styles.roleButton,
-                                            formData.role === r && styles.roleButtonActive
+                                            formData.role === r.value && styles.roleButtonActive
                                         ]}
-                                        onPress={() => handleChange('role', r)}
+                                        onPress={() => handleChange('role', r.value)}
                                     >
-                                        <Text style={[
-                                            styles.roleText,
-                                            formData.role === r && styles.roleTextActive
-                                        ]}>{r}</Text>
+                                        <AppText
+                                            variant="label"
+                                            style={[
+                                                styles.roleText,
+                                                formData.role === r.value && styles.roleTextActive
+                                            ]}
+                                        >{r.label}</AppText>
                                     </TouchableOpacity>
                                 ))}
                             </View>
                         </View>
 
-                        <TouchableOpacity
-                            style={styles.button}
+                        <Button
+                            title="Sign Up"
                             onPress={handleRegister}
+                            loading={loading}
                             disabled={loading}
-                        >
-                            {loading ? (
-                                <ActivityIndicator color="#FFF" />
-                            ) : (
-                                <Text style={styles.buttonText}>Sign Up</Text>
-                            )}
-                        </TouchableOpacity>
+                            fullWidth
+                            size="lg"
+                            style={styles.button}
+                        />
 
                         <View style={styles.footer}>
-                            <Text style={styles.footerText}>Already have an account? </Text>
+                            <AppText variant="body" color="textSecondary">Already have an account? </AppText>
                             <TouchableOpacity onPress={() => router.push('/auth/login')}>
-                                <Text style={styles.linkText}>Log In</Text>
+                                <AppText variant="body" color="primary" weight="bold">Log In</AppText>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -225,107 +238,82 @@ export default function RegisterScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#FFF',
-    },
-    scrollContent: {
-        padding: 24,
-        paddingBottom: 40,
-    },
-    backButton: {
-        marginBottom: 20,
-    },
-    header: {
-        marginBottom: 32,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-    },
-    form: {
-        gap: 20,
-    },
-    row: {
-        flexDirection: 'row',
-    },
-    inputGroup: {
-        gap: 8,
-    },
-    label: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 4,
-    },
-    input: {
-        backgroundColor: '#F5F7FA',
-        padding: 16,
-        borderRadius: 12,
-        fontSize: 16,
-        color: '#333',
-        borderWidth: 1,
-        borderColor: '#E1E8ED',
-    },
-    roleContainer: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    roleButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 20,
-        backgroundColor: '#F5F7FA',
-        borderWidth: 1,
-        borderColor: '#E1E8ED',
-    },
-    roleButtonActive: {
-        backgroundColor: '#4A90E2',
-        borderColor: '#4A90E2',
-    },
-    roleText: {
-        color: '#666',
-        fontWeight: '600',
-    },
-    roleTextActive: {
-        color: '#FFF',
-    },
-    button: {
-        backgroundColor: '#4A90E2',
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 10,
-        shadowColor: '#4A90E2',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    buttonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    footer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-    footerText: {
-        color: '#666',
-        fontSize: 14,
-    },
-    linkText: {
-        color: '#4A90E2',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: c.background,
+        },
+        scrollContent: {
+            padding: 24,
+            paddingBottom: 40,
+        },
+        backButton: {
+            marginBottom: 20,
+        },
+        header: {
+            marginBottom: 32,
+        },
+        title: {
+            marginBottom: 8,
+        },
+        label: {
+            marginBottom: 4,
+            color: c.text,
+        },
+        form: {
+            gap: 20,
+        },
+        row: {
+            flexDirection: 'row',
+        },
+        inputGroup: {
+            gap: 8,
+        },
+        input: {
+            backgroundColor: c.surface,
+            padding: 16,
+            borderRadius: r.md,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        roleContainer: {
+            flexDirection: 'row',
+            gap: 10,
+        },
+        roleButton: {
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: r.pill,
+            backgroundColor: c.surfaceAlt,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        roleButtonActive: {
+            backgroundColor: c.primary,
+            borderColor: c.primary,
+        },
+        roleText: {
+            color: c.textSecondary,
+        },
+        roleTextActive: {
+            color: c.textOnPrimary,
+        },
+        button: {
+            marginTop: 10,
+            ...sh.sm,
+        },
+        footer: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            marginTop: 20,
+        },
+    });
+};

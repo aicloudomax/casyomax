@@ -1,14 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
+import { Alert } from '@/services/CrossPlatformAlert';
 import { useEffect, useState } from 'react';
-import { Alert, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, TextInput, View } from 'react-native';
 import SkeletonLoader from '../../components/SkeletonLoader';
+import { AppText } from '../../components/ui/AppText';
+import { Avatar } from '../../components/ui/Avatar';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Screen } from '../../components/ui/Screen';
 import { ENDPOINTS } from '../../constants/ApiConstants';
 import ApiHelper from '../../services/ApiHelper';
 import { deleteAccount, logoutUser } from '../../services/AuthService';
+import { useTheme } from '../../theme/ThemeProvider';
+
+const roleLabel = (role) => {
+    if (!role) return 'User';
+    if (role === 'caregiver') return 'Caretaker';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+};
 
 const PatientProfileScreen = () => {
+    const { colors, spacing, radius, fonts } = useTheme();
     const router = useRouter();
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -25,19 +40,17 @@ const PatientProfileScreen = () => {
             const userDataStr = await SecureStore.getItemAsync('userData');
             if (userDataStr) {
                 const userData = JSON.parse(userDataStr);
-                // Fetch fresh data from API
                 const response = await ApiHelper.get(`${ENDPOINTS.USERS}/${userData.id}`);
                 if (response.success) {
                     setUser(response.user);
-                    // Update SecureStore with fresh data
                     await SecureStore.setItemAsync('userData', JSON.stringify(response.user));
                 } else {
-                    setUser(userData); // Fallback to cached data
+                    setUser(userData);
                 }
             }
         } catch (error) {
-            console.error("Error fetching profile:", error);
-            Alert.alert("Error", "Failed to load profile data.");
+            console.error('Error fetching profile:', error);
+            Alert.alert('Error', 'Failed to load profile data.');
         } finally {
             setLoading(false);
         }
@@ -47,344 +60,172 @@ const PatientProfileScreen = () => {
         await logoutUser();
     };
 
-    const handleDeleteAccount = () => {
-        setModalVisible(true);
-    };
-
     const confirmDelete = async () => {
         if (!password) {
-            Alert.alert("Error", "Please enter your password.");
+            Alert.alert('Error', 'Please enter your password.');
             return;
         }
-
         setDeleting(true);
         const result = await deleteAccount(password);
         setDeleting(false);
         setModalVisible(false);
         setPassword('');
-
         if (!result.success) {
-            Alert.alert("Error", result.message);
+            Alert.alert('Error', result.message);
         }
+    };
+
+    const InfoRow = ({ icon, label, value, last }) => (
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingVertical: spacing.md,
+                borderBottomWidth: last ? 0 : 1,
+                borderBottomColor: colors.border,
+            }}
+        >
+            <View style={iconCircle}>
+                <Ionicons name={icon} size={18} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+                <AppText variant="caption" color="textMuted">{label}</AppText>
+                <AppText variant="bodyLg" weight="medium">{value || 'N/A'}</AppText>
+            </View>
+        </View>
+    );
+
+    const ActionRow = ({ icon, label, onPress }) => (
+        <Card onPress={onPress} style={{ marginBottom: spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                <View style={iconCircle}>
+                    <Ionicons name={icon} size={18} color={colors.primary} />
+                </View>
+                <AppText variant="subtitle" style={{ flex: 1 }}>{label}</AppText>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </View>
+        </Card>
+    );
+
+    const iconCircle = {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: colors.primarySoft,
+        alignItems: 'center',
+        justifyContent: 'center',
     };
 
     if (loading) {
         return (
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <SkeletonLoader width={100} height={100} borderRadius={50} style={{ marginBottom: 16 }} />
-                    <SkeletonLoader width={150} height={24} style={{ marginBottom: 8 }} />
-                    <SkeletonLoader width={80} height={16} />
+            <Screen scroll edges={['left', 'right']}>
+                <View style={{ alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.xl }}>
+                    <SkeletonLoader width={104} height={104} borderRadius={52} style={{ marginBottom: spacing.lg }} />
+                    <SkeletonLoader width={160} height={24} style={{ marginBottom: spacing.sm }} />
+                    <SkeletonLoader width={90} height={16} />
                 </View>
-                <View style={styles.infoSection}>
-                    <View style={styles.infoItem}>
-                        <SkeletonLoader width={60} height={14} style={{ marginBottom: 4 }} />
-                        <SkeletonLoader width={200} height={16} />
-                    </View>
-                    <View style={styles.infoItem}>
-                        <SkeletonLoader width={60} height={14} style={{ marginBottom: 4 }} />
-                        <SkeletonLoader width={150} height={16} />
-                    </View>
-                </View>
-                <SkeletonLoader width="100%" height={50} borderRadius={12} style={{ marginBottom: 16 }} />
-                <SkeletonLoader width="100%" height={50} borderRadius={12} />
-            </View>
+                <SkeletonLoader width="100%" height={140} borderRadius={radius.lg} style={{ marginBottom: spacing.lg }} />
+                <SkeletonLoader width="100%" height={64} borderRadius={radius.lg} style={{ marginBottom: spacing.md }} />
+                <SkeletonLoader width="100%" height={64} borderRadius={radius.lg} />
+            </Screen>
         );
     }
 
     if (!user) {
         return (
-            <View style={styles.center}>
-                <Text>No user data found.</Text>
-            </View>
+            <Screen edges={['left', 'right']}>
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <AppText variant="body" color="textSecondary">No user data found.</AppText>
+                </View>
+            </Screen>
         );
     }
 
+    const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+
     return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                {user.profile_image_url ? (
-                    <Image source={{ uri: user.profile_image_url }} style={styles.avatarImage} />
-                ) : (
-                    <View style={styles.avatarContainer}>
-                        <Text style={styles.avatarText}>
-                            {((user.first_name?.[0] || '') + (user.last_name?.[0] || '')).toUpperCase()}
-                        </Text>
-                    </View>
-                )}
-                <Text style={styles.name}>{user.first_name} {user.last_name}</Text>
-                <Text style={styles.role}>{user.role}</Text>
+        <Screen scroll edges={['left', 'right']}>
+            <View style={{ alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.xl }}>
+                <Avatar uri={user.profile_image_url} name={fullName} size={104} />
+                <AppText variant="titleLg" style={{ marginTop: spacing.lg }}>{fullName}</AppText>
+                <Badge tone="primary" label={roleLabel(user.role)} style={{ marginTop: spacing.sm }} />
             </View>
 
-            <View style={styles.infoSection}>
-                <View style={styles.infoItem}>
-                    <Text style={styles.label}>Email</Text>
-                    <Text style={styles.value}>{user.email}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                    <Text style={styles.label}>Phone</Text>
-                    <Text style={styles.value}>{user.phone || 'N/A'}</Text>
-                </View>
+            <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
+                <InfoRow icon="mail-outline" label="Email" value={user.email} />
+                <InfoRow icon="call-outline" label="Phone" value={user.phone} last />
+            </Card>
+
+            <ActionRow icon="time-outline" label="Medication History" onPress={() => router.push('/patient/medication-history')} />
+            <ActionRow icon="people-outline" label="My Contacts" onPress={() => router.push('/patient/contacts')} />
+
+            <View style={{ marginTop: spacing.md }}>
+                <Button
+                    title="Log out"
+                    icon="log-out-outline"
+                    variant="secondary"
+                    fullWidth
+                    onPress={handleLogout}
+                    style={{ marginBottom: spacing.md }}
+                />
+                <Button
+                    title="Delete account"
+                    icon="trash-outline"
+                    variant="ghost"
+                    color={colors.danger}
+                    fullWidth
+                    onPress={() => setModalVisible(true)}
+                    style={{ borderWidth: 1, borderColor: colors.danger }}
+                />
             </View>
 
-            <TouchableOpacity style={styles.historyButton} onPress={() => router.push('/patient/medication-history')}>
-                <Ionicons name="time-outline" size={20} color="#FFF" />
-                <Text style={styles.historyButtonText}>Medication History</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.historyButton, { backgroundColor: '#00796b', marginTop: -8 }]} onPress={() => router.push('/patient/contacts')}>
-                <Ionicons name="people-outline" size={20} color="#FFF" />
-                <Text style={styles.historyButtonText}>My Contacts</Text>
-            </TouchableOpacity>
-
-
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
-                <Ionicons name="log-out-outline" size={20} color="#FFF" style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-                <Text style={styles.deleteButtonText}>Delete Account</Text>
-                <Ionicons name="trash-outline" size={20} color="#FF3B30" style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
-
-            <Modal
-                transparent={true}
-                visible={modalVisible}
-                animationType="fade"
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Delete Account</Text>
-                        <Text style={styles.modalMessage}>
-                            Are you sure you want to delete your account? This action cannot be undone.
-                            {"\n\n"}
-                            Please enter your password to confirm.
-                        </Text>
-
+            <Modal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+                <View style={{ flex: 1, backgroundColor: colors.overlay, justifyContent: 'center', padding: spacing.xl }}>
+                    <Card elevation="lg">
+                        <AppText variant="title" align="center">Delete account</AppText>
+                        <AppText variant="body" color="textSecondary" align="center" style={{ marginTop: spacing.sm }}>
+                            This cannot be undone. Enter your password to confirm.
+                        </AppText>
                         <TextInput
-                            style={styles.input}
                             placeholder="Password"
                             secureTextEntry
                             value={password}
                             onChangeText={setPassword}
-                            placeholderTextColor="#999"
+                            placeholderTextColor={colors.textMuted}
+                            style={{
+                                backgroundColor: colors.surfaceSunken,
+                                borderRadius: radius.md,
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                padding: spacing.md,
+                                marginTop: spacing.lg,
+                                marginBottom: spacing.lg,
+                                color: colors.text,
+                                fontFamily: fonts.regular,
+                                fontSize: 16,
+                            }}
                         />
-
-                        <View style={styles.modalButtons}>
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.cancelButton]}
-                                onPress={() => {
-                                    setModalVisible(false);
-                                    setPassword('');
-                                }}
-                            >
-                                <Text style={styles.cancelButtonText}>Cancel</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={[styles.modalButton, styles.confirmButton]}
+                        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+                            <Button
+                                title="Cancel"
+                                variant="secondary"
+                                onPress={() => { setModalVisible(false); setPassword(''); }}
+                                style={{ flex: 1, justifyContent: 'center' }}
+                            />
+                            <Button
+                                title={deleting ? 'Deleting…' : 'Delete'}
+                                variant="danger"
+                                loading={deleting}
                                 onPress={confirmDelete}
-                                disabled={deleting}
-                            >
-                                <Text style={styles.confirmButtonText}>
-                                    {deleting ? "Deleting..." : "Delete"}
-                                </Text>
-                            </TouchableOpacity>
+                                style={{ flex: 1, justifyContent: 'center' }}
+                            />
                         </View>
-                    </View>
+                    </Card>
                 </View>
             </Modal>
-        </View>
+        </Screen>
     );
 };
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-        padding: 20,
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    avatarContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#4A90E2',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    avatarImage: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        marginBottom: 16,
-    },
-    avatarText: {
-        color: '#FFF',
-        fontSize: 36,
-        fontWeight: 'bold',
-    },
-    name: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    role: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 4,
-        textTransform: 'capitalize',
-    },
-    infoSection: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
-    },
-    infoItem: {
-        marginBottom: 16,
-    },
-    label: {
-        fontSize: 14,
-        color: '#999',
-        marginBottom: 4,
-    },
-    value: {
-        fontSize: 16,
-        color: '#333',
-        fontWeight: '500',
-    },
-    historyButton: {
-        backgroundColor: '#2D9CDB',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    historyButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginLeft: 8,
-    },
-    logoutButton: {
-        backgroundColor: '#FF3B30',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 12,
-    },
-    logoutButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    deleteButton: {
-        backgroundColor: '#FFF',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 12,
-        marginTop: 16,
-        borderWidth: 1,
-        borderColor: '#FF3B30',
-        marginBottom: 32, // Add some bottom margin for scroll
-    },
-    deleteButtonText: {
-        color: '#FF3B30',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    modalContent: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 24,
-        width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    modalTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    modalMessage: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 20,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    input: {
-        backgroundColor: '#F5F7FA',
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-        color: '#333',
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-    },
-    modalButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 12,
-    },
-    modalButton: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#F5F7FA',
-    },
-    confirmButton: {
-        backgroundColor: '#FF3B30',
-    },
-    cancelButtonText: {
-        color: '#666',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    confirmButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    }
-});
 
 export default PatientProfileScreen;

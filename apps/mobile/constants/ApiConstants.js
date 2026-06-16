@@ -55,6 +55,7 @@ export const ENDPOINTS = {
 
 export const ROLES = {
     ADMIN: 'admin',
-    CARETAKER: 'caregiver', // API returns 'caregiver'
+    CAREGIVER: 'caregiver',
+    CARETAKER: 'caregiver', // Backward-compatible alias for existing /caretaker routes.
     PATIENT: 'patient',
 };

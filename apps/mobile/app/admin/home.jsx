@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
 import SkeletonLoader from '../../components/SkeletonLoader';
+import { Avatar } from '../../components/ui/Avatar';
 import { ENDPOINTS, ROLES } from '../../constants/ApiConstants';
 import ApiHelper from '../../services/ApiHelper';
 import { getCurrentUser } from '../../services/AuthService';
+import { useTheme } from '../../theme/ThemeProvider';
 
 // --- Stats Config (values are dynamic) ---
 const STATS_CONFIG = [
@@ -56,13 +59,33 @@ const SUBS = [
 ];
 
 const TABS = ['All Users', 'Invites'/*, 'Subs'*/];
-const FILTER_TABS = ['All', 'Patient', 'CareTaker'];
+const FILTER_TABS = ['All', 'Patient', 'Caretaker'];
 
 // New Constants for Dropdown
-const USER_ROLES = ['Patient', 'CareTaker', 'Admin', 'Guardian'];
+const USER_ROLES = ['Patient', 'Caretaker', 'Admin', 'Guardian'];
 const USER_STATUS = ['Active', 'Inactive'];
 
+// Invite role picker: label = displayed term, value = backend role.
+// "Caretaker" is the display term; the backend role stays "caregiver".
+const INVITE_ROLES = [
+    { label: 'Patient', value: 'patient' },
+    { label: 'Caretaker', value: 'caregiver' },
+    { label: 'Admin', value: 'admin' },
+    { label: 'Guardian', value: 'guardian' },
+];
+
+// Convert a backend role value to its display label (caregiver -> Caretaker).
+const formatRoleLabel = (role) => {
+    if (!role) return 'User';
+    if (role === 'caregiver') return 'Caretaker';
+    return role.charAt(0).toUpperCase() + role.slice(1);
+};
+
 export default function AdminHomeScreen() {
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
+
     const [activeTab, setActiveTab] = useState('All Users');
     const [searchText, setSearchText] = useState('');
     const [selectedRole, setSelectedRole] = useState('All');
@@ -109,8 +132,8 @@ export default function AdminHomeScreen() {
         }
     }, [activeTab, searchText, selectedRole]);
 
-    const fetchUsers = async (query = searchText, role = selectedRole) => {
-        setLoading(true);
+    const fetchUsers = async (query = searchText, role = selectedRole, { silent = false } = {}) => {
+        if (!silent) setLoading(true);
         try {
             let url = ENDPOINTS.USERS;
             const params = [];
@@ -118,7 +141,7 @@ export default function AdminHomeScreen() {
             // Map UI roles to DB values
             const roleMap = {
                 'Patient': 'patient',
-                'CareTaker': 'caregiver',
+                'Caretaker': 'caregiver',
                 'All': null
             };
             const dbRole = roleMap[role];
@@ -137,7 +160,7 @@ export default function AdminHomeScreen() {
                     id: user.id.toString(),
                     name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown User',
                     email: user.email,
-                    role: user.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : 'User',
+                    role: formatRoleLabel(user.role),
                     status: user.is_active ? 'Active' : 'Inactive',
                     statusColor: user.is_active ? '#27AE60' : '#EB5757',
                     avatarText: ((user.first_name?.[0] || '') + (user.last_name?.[0] || '')).toUpperCase() || 'U',
@@ -152,14 +175,14 @@ export default function AdminHomeScreen() {
             console.error("Fetch users error:", error);
             Alert.alert("Error", "An error occurred while fetching users.");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
     const [invites, setInvites] = useState([]);
 
-    const fetchInvites = async (query = '') => {
-        setLoading(true);
+    const fetchInvites = async (query = '', { silent = false } = {}) => {
+        if (!silent) setLoading(true);
         try {
             let url = ENDPOINTS.INVITE.LIST;
             if (query) {
@@ -173,7 +196,7 @@ export default function AdminHomeScreen() {
                     return {
                         id: invite.id.toString(),
                         email: invite.email,
-                        role: invite.role.charAt(0).toUpperCase() + invite.role.slice(1),
+                        role: formatRoleLabel(invite.role),
                         status: isRegistered ? 'Registered' : 'Pending',
                         statusColor: isRegistered ? '#27AE60' : '#F2994A', // Green for registered, Orange for pending
                         date: new Date(invite.created_at).toLocaleDateString(),
@@ -190,7 +213,7 @@ export default function AdminHomeScreen() {
             console.error("Fetch invites error:", error);
             Alert.alert("Error", "Failed to fetch invites.");
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -200,7 +223,7 @@ export default function AdminHomeScreen() {
             const response = await ApiHelper.post(ENDPOINTS.INVITE.RESEND(id));
             if (response.success) {
                 Alert.alert("Success", "Invite resent successfully!");
-                fetchInvites(); // Refresh list
+                fetchInvites(searchText, { silent: true }); // Refresh list in place
             }
         } catch (error) {
             console.error("Resend invite error:", error);
@@ -230,11 +253,12 @@ export default function AdminHomeScreen() {
             const url = `${ENDPOINTS.CAREGIVER.PATIENT}/${patientId}`;
             const response = await ApiHelper.get(url);
             if (response.success) {
-                setAssignedCaretakers(response.caretakers);
-                setInitialAssignedCaretakers(response.caretakers);
+                const caregivers = response.caregivers || response.caretakers || [];
+                setAssignedCaretakers(caregivers);
+                setInitialAssignedCaretakers(caregivers);
             }
         } catch (error) {
-            console.error("Error fetching assigned caretakers:", error);
+            console.error("Error fetching assigned caregivers:", error);
         }
     };
 
@@ -246,7 +270,7 @@ export default function AdminHomeScreen() {
                 setAllCaretakers(response.users);
             }
         } catch (error) {
-            console.error("Error fetching all caretakers:", error);
+            console.error("Error fetching all caregivers:", error);
         }
     };
 
@@ -286,7 +310,7 @@ export default function AdminHomeScreen() {
             toAdd.forEach(caretaker => {
                 promises.push(ApiHelper.post(ENDPOINTS.CAREGIVER.ASSIGN, {
                     patientId: selectedUser.id,
-                    caretakerId: caretaker.id,
+                    caregiverId: caretaker.id,
                     assignedBy: currentUser?.id
                 }));
             });
@@ -295,7 +319,7 @@ export default function AdminHomeScreen() {
             toRemove.forEach(caretaker => {
                 promises.push(ApiHelper.delete(ENDPOINTS.CAREGIVER.REMOVE, {
                     patientId: selectedUser.id,
-                    caretakerId: caretaker.id
+                    caregiverId: caretaker.id
                 }));
             });
 
@@ -305,7 +329,7 @@ export default function AdminHomeScreen() {
                 {
                     text: "OK", onPress: () => {
                         setEditModalVisible(false);
-                        fetchUsers();
+                        fetchUsers(searchText, selectedRole, { silent: true });
                     }
                 }
             ]);
@@ -343,16 +367,14 @@ export default function AdminHomeScreen() {
         <View style={styles.userCard}>
             <View style={styles.userHeader}>
                 <View style={styles.userInfoLeft}>
-                    <View style={styles.avatarContainer}>
-                        <Text style={styles.avatarText}>{item.avatarText}</Text>
-                    </View>
+                    <Avatar uri={item.image} name={item.name} initials={item.avatarText} size={48} style={{ marginRight: 12 }} />
                     <View>
                         <Text style={styles.userName}>{item.name}</Text>
                         <Text style={styles.userEmail}>{item.email}</Text>
                     </View>
                 </View>
                 <TouchableOpacity style={styles.userActions} onPress={() => openEditModal(item)}>
-                    <Ionicons name="ellipsis-vertical" size={20} color="#999" />
+                    <Ionicons name="ellipsis-vertical" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
             </View>
 
@@ -401,11 +423,11 @@ export default function AdminHomeScreen() {
                 <View style={styles.inviteAction}>
                     {!isRegistered && (
                         <TouchableOpacity onPress={() => handleResendInvite(item.id)} style={{ padding: 8 }}>
-                            <Ionicons name="refresh-circle" size={32} color="#4A90E2" />
+                            <Ionicons name="refresh-circle" size={32} color={colors.primary} />
                         </TouchableOpacity>
                     )}
                     {isRegistered && (
-                        <Ionicons name="checkmark-circle" size={32} color="#27AE60" />
+                        <Ionicons name="checkmark-circle" size={32} color={colors.success} />
                     )}
                 </View>
             </View>
@@ -428,7 +450,7 @@ export default function AdminHomeScreen() {
             </View>
 
             <View style={styles.userMeta}>
-                <Text style={[styles.statusText, { color: '#666' }]}>Status:</Text>
+                <Text style={[styles.statusText, { color: colors.textSecondary }]}>Status:</Text>
                 <View style={{ width: 16 }} />
                 <Text style={[styles.statusText, { color: item.statusColor }]}>
                     (•) {item.status}
@@ -475,11 +497,11 @@ export default function AdminHomeScreen() {
     const renderSearchBar = () => (
         <View style={{ marginBottom: 16 }}>
             <View style={styles.searchContainer}>
-                <Ionicons name="search-outline" size={20} color="#999" style={styles.searchIcon} />
+                <Ionicons name="search-outline" size={20} color={colors.textMuted} style={styles.searchIcon} />
                 <TextInput
                     style={styles.searchInput}
                     placeholder={activeTab === 'Invites' ? "Search invites..." : "Search by name, email..."}
-                    placeholderTextColor="#999"
+                    placeholderTextColor={colors.textMuted}
                     value={searchText}
                     onChangeText={setSearchText}
                 />
@@ -588,7 +610,7 @@ export default function AdminHomeScreen() {
                             ListHeaderComponent={renderStatsAndFilters}
                             ListEmptyComponent={
                                 <View style={{ alignItems: 'center', marginTop: 40 }}>
-                                    <Text style={{ color: '#999' }}>No users found.</Text>
+                                    <Text style={styles.emptyText}>No users found.</Text>
                                 </View>
                             }
                         />
@@ -610,7 +632,7 @@ export default function AdminHomeScreen() {
                         refreshing={loading}
                         ListEmptyComponent={
                             <View style={{ alignItems: 'center', marginTop: 40 }}>
-                                <Text style={{ color: '#999' }}>No pending invites.</Text>
+                                <Text style={styles.emptyText}>No pending invites.</Text>
                             </View>
                         }
                     />
@@ -618,7 +640,7 @@ export default function AdminHomeScreen() {
                         style={styles.fab}
                         onPress={() => setInviteModalVisible(true)}
                     >
-                        <Ionicons name="add" size={24} color="#FFF" />
+                        <Ionicons name="add" size={24} color={colors.textOnPrimary} />
                         <Text style={styles.fabText}>Invite</Text>
                     </TouchableOpacity>
                 </View>
@@ -659,7 +681,7 @@ export default function AdminHomeScreen() {
     // Invite Modal State
     const [inviteModalVisible, setInviteModalVisible] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState('Patient'); // Default
+    const [inviteRole, setInviteRole] = useState('patient'); // Default (backend role value)
 
     const handleSendInvite = async () => {
         if (!inviteEmail) {
@@ -676,7 +698,7 @@ export default function AdminHomeScreen() {
                 {
                     text: "OK", onPress: () => {
                         setInviteModalVisible(false);
-                        fetchInvites(); // Reload list automatically
+                        fetchInvites(searchText, { silent: true }); // Reload list in place
                     }
                 }
             ]);
@@ -701,7 +723,7 @@ export default function AdminHomeScreen() {
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Send Invite</Text>
                         <TouchableOpacity onPress={() => !loading && setInviteModalVisible(false)} disabled={loading}>
-                            <Ionicons name="close" size={24} color="#333" />
+                            <Ionicons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
                     </View>
                     <Text style={styles.modalSubtitle}>Enter details to invite a new user.</Text>
@@ -711,6 +733,7 @@ export default function AdminHomeScreen() {
                         <TextInput
                             style={styles.input}
                             placeholder="user@example.com"
+                            placeholderTextColor={colors.textMuted}
                             value={inviteEmail}
                             onChangeText={setInviteEmail}
                             autoCapitalize="none"
@@ -722,21 +745,21 @@ export default function AdminHomeScreen() {
                     <View style={styles.inputGroup}>
                         <Text style={styles.label}>Role</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                            {['Patient', 'Caregiver', 'Admin', 'Guardian'].map(role => (
+                            {INVITE_ROLES.map(r => (
                                 <TouchableOpacity
-                                    key={role}
+                                    key={r.value}
                                     style={[
                                         styles.filterPill,
-                                        inviteRole === role && styles.activeFilterPill,
+                                        inviteRole === r.value && styles.activeFilterPill,
                                         loading && { opacity: 0.5 }
                                     ]}
-                                    onPress={() => !loading && setInviteRole(role)}
+                                    onPress={() => !loading && setInviteRole(r.value)}
                                     disabled={loading}
                                 >
                                     <Text style={[
                                         styles.filterPillText,
-                                        inviteRole === role && styles.activeFilterPillText
-                                    ]}>{role}</Text>
+                                        inviteRole === r.value && styles.activeFilterPillText
+                                    ]}>{r.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -756,7 +779,7 @@ export default function AdminHomeScreen() {
                             disabled={loading}
                         >
                             {loading ? (
-                                <ActivityIndicator size="small" color="#FFF" />
+                                <ActivityIndicator size="small" color={colors.textOnPrimary} />
                             ) : (
                                 <Text style={styles.saveButtonText}>Send Invite</Text>
                             )}
@@ -779,10 +802,10 @@ export default function AdminHomeScreen() {
                     <View style={styles.modalHeader}>
                         <Text style={styles.modalTitle}>Edit User: {selectedUser?.name}</Text>
                         <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                            <Ionicons name="close" size={24} color="#333" />
+                            <Ionicons name="close" size={24} color={colors.text} />
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.modalSubtitle}>Modify the user's role, subscription, and assigned caretakers.</Text>
+                    <Text style={styles.modalSubtitle}>Modify role, subscription, and assigned caretakers.</Text>
 
                     {/* Role Dropdown */}
                     <View style={styles.inputGroup}>
@@ -790,8 +813,8 @@ export default function AdminHomeScreen() {
                         <View style={styles.dropdown}>
                             {/* Simple custom dropdown representation */}
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text style={{ color: '#333' }}>{editRole}</Text>
-                                <Ionicons name="chevron-down" size={20} color="#999" />
+                                <Text style={{ color: colors.text }}>{editRole}</Text>
+                                <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
                             </View>
                         </View>
                     </View>
@@ -801,13 +824,13 @@ export default function AdminHomeScreen() {
                         <Text style={styles.label}>Subscription</Text>
                         <View style={styles.dropdown}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text style={{ color: '#333' }}>{editStatus}</Text>
-                                <Ionicons name="chevron-down" size={20} color="#999" />
+                                <Text style={{ color: colors.text }}>{editStatus}</Text>
+                                <Ionicons name="chevron-down" size={20} color={colors.textMuted} />
                             </View>
                         </View>
                     </View>
 
-                    {/* Assigned Caretakers (Conditional) */}
+                    {/* Assigned Caregivers (Conditional) */}
                     {editRole === 'Patient' && (
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Assigned Caretakers</Text>
@@ -816,8 +839,8 @@ export default function AdminHomeScreen() {
                                 onPress={() => setShowCaretakerDropdown(!showCaretakerDropdown)}
                             >
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text style={{ color: '#999' }}>Select caretakers...</Text>
-                                    <Ionicons name="chevron-expand" size={20} color="#4A90E2" />
+                                    <Text style={{ color: colors.textMuted }}>Select caretakers...</Text>
+                                    <Ionicons name="chevron-expand" size={20} color={colors.primary} />
                                 </View>
                             </TouchableOpacity>
 
@@ -830,7 +853,7 @@ export default function AdminHomeScreen() {
                                         onPress={() => toggleCaretakerAssignment(caretaker, true)}
                                     >
                                         <Text style={styles.selectedChipText}>{caretaker.first_name} {caretaker.last_name}</Text>
-                                        <Ionicons name="close" size={14} color="#333" style={{ marginLeft: 4 }} />
+                                        <Ionicons name="close" size={14} color={colors.accentViolet} style={{ marginLeft: 4 }} />
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -841,6 +864,7 @@ export default function AdminHomeScreen() {
                                     <TextInput
                                         style={styles.dropdownSearch}
                                         placeholder="Search caretakers..."
+                                        placeholderTextColor={colors.textMuted}
                                         value={caretakerSearchText}
                                         onChangeText={setCaretakerSearchText}
                                     />
@@ -858,9 +882,9 @@ export default function AdminHomeScreen() {
                                                         onPress={() => toggleCaretakerAssignment(caretaker, isAssigned)}
                                                     >
                                                         <View style={[styles.checkbox, isAssigned && styles.checkboxConfigured]}>
-                                                            {isAssigned && <Ionicons name="checkmark" size={14} color="#FFF" />}
+                                                            {isAssigned && <Ionicons name="checkmark" size={14} color={colors.textOnPrimary} />}
                                                         </View>
-                                                        <Text style={{ marginLeft: 8, color: '#333' }}>
+                                                        <Text style={{ marginLeft: 8, color: colors.text }}>
                                                             {caretaker.first_name} {caretaker.last_name}
                                                         </Text>
                                                     </TouchableOpacity>
@@ -918,524 +942,532 @@ export default function AdminHomeScreen() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-    },
-    content: {
-        flex: 1,
-        paddingTop: 16,
-    },
-    pageSubtitle: {
-        fontSize: 14,
-        color: '#666',
-        paddingHorizontal: 20,
-        marginBottom: 8,
-    },
-    statsContainer: {
-        marginBottom: 8,
-    },
-    statsContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 10,
-    },
-    statCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        width: 150,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-        flexDirection: 'column',
-    },
-    statIconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    statValue: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    statTitle: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 4,
-    },
-    filterSection: {
-        paddingHorizontal: 20,
-        marginBottom: 16,
-    },
-    tabsContainer: {
-        flexDirection: 'row',
-        marginBottom: 16,
-    },
-    tab: {
-        marginRight: 24,
-        paddingBottom: 8,
-    },
-    activeTab: {
-        borderBottomWidth: 2,
-        borderBottomColor: '#333',
-    },
-    tabText: {
-        fontSize: 16,
-        color: '#999',
-        fontWeight: '600',
-    },
-    activeTabText: {
-        color: '#333',
-    },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        height: 48,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 1,
-    },
-    filterPillsContainer: {
-        marginTop: 12,
-        marginBottom: 16,
-        flexDirection: 'row',
-    },
-    filterPill: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 20,
-        backgroundColor: '#EeEeEe',
-        marginRight: 8,
-    },
-    activeFilterPill: {
-        backgroundColor: '#333',
-    },
-    filterPillText: {
-        fontSize: 13,
-        color: '#666',
-        fontWeight: '500',
-    },
-    activeFilterPillText: {
-        color: '#FFF',
-    },
-    searchIcon: {
-        marginRight: 12,
-    },
-    searchInput: {
-        flex: 1,
-        fontSize: 16,
-        color: '#333',
-    },
-    listContent: {
-        paddingHorizontal: 20,
-        paddingBottom: 80, // Space for FAB
-    },
-    userCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    userHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-    },
-    userInfoLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatarContainer: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: '#F0F2F5',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    avatarText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#4A90E2',
-    },
-    userName: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    userEmail: {
-        fontSize: 13,
-        color: '#888',
-    },
-    userActions: {
-        padding: 4,
-    },
-    userMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    roleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F8F9FA',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    roleLabel: {
-        fontSize: 12,
-        color: '#555',
-        fontWeight: '600',
-        marginRight: 6,
-    },
-    dot: {
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: '#CCC',
-        marginHorizontal: 8,
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#F0F0F0',
-        marginVertical: 12,
-    },
-    cardFooter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap', // Allow chips to wrap if many
-    },
-    assigneesLabel: {
-        fontSize: 12,
-        color: '#999',
-        marginRight: 8,
-    },
-    assigneesContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-    },
-    assigneeAvatar: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#FFF',
-    },
-    assigneeChip: {
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-        borderWidth: 1,
-        marginRight: 6,
-        marginBottom: 2,
-    },
-    assigneeChipText: {
-        fontSize: 10,
-        fontWeight: '600',
-    },
-    noAssignees: {
-        fontSize: 12,
-        color: '#CCC',
-    },
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: c.background,
+        },
+        content: {
+            flex: 1,
+            paddingTop: 16,
+        },
+        pageSubtitle: {
+            fontSize: 14,
+            color: c.textSecondary,
+            fontFamily: f.regular,
+            paddingHorizontal: 20,
+            marginBottom: 8,
+        },
+        statsContainer: {
+            marginBottom: 8,
+        },
+        statsContent: {
+            paddingHorizontal: 20,
+            paddingBottom: 10,
+        },
+        statCard: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 16,
+            width: 150,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+            flexDirection: 'column',
+        },
+        statIconContainer: {
+            width: 40,
+            height: 40,
+            borderRadius: r.md,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 12,
+        },
+        statValue: {
+            fontSize: 22,
+            fontFamily: f.bold,
+            color: c.text,
+        },
+        statTitle: {
+            fontSize: 12,
+            color: c.textMuted,
+            fontFamily: f.medium,
+            marginTop: 4,
+        },
+        filterSection: {
+            paddingHorizontal: 20,
+            marginBottom: 16,
+        },
+        tabsContainer: {
+            flexDirection: 'row',
+            marginBottom: 16,
+        },
+        tab: {
+            marginRight: 24,
+            paddingBottom: 8,
+        },
+        activeTab: {
+            borderBottomWidth: 2,
+            borderBottomColor: c.primary,
+        },
+        tabText: {
+            fontSize: 16,
+            color: c.textMuted,
+            fontFamily: f.semibold,
+        },
+        activeTabText: {
+            color: c.text,
+        },
+        searchContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.surface,
+            borderRadius: r.md,
+            paddingHorizontal: 16,
+            height: 48,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        filterPillsContainer: {
+            marginTop: 12,
+            marginBottom: 16,
+            flexDirection: 'row',
+        },
+        filterPill: {
+            paddingHorizontal: 16,
+            paddingVertical: 6,
+            borderRadius: r.pill,
+            backgroundColor: c.surfaceAlt,
+            marginRight: 8,
+        },
+        activeFilterPill: {
+            backgroundColor: c.primary,
+        },
+        filterPillText: {
+            fontSize: 13,
+            color: c.textSecondary,
+            fontFamily: f.medium,
+        },
+        activeFilterPillText: {
+            color: c.textOnPrimary,
+        },
+        searchIcon: {
+            marginRight: 12,
+        },
+        searchInput: {
+            flex: 1,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        listContent: {
+            paddingHorizontal: 20,
+            paddingBottom: 80, // Space for FAB
+        },
+        emptyText: {
+            color: c.textMuted,
+            fontFamily: f.regular,
+        },
+        userCard: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        userHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+        },
+        userInfoLeft: {
+            flexDirection: 'row',
+            alignItems: 'center',
+        },
+        avatarContainer: {
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: c.surfaceAlt,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 12,
+        },
+        avatarText: {
+            fontSize: 18,
+            fontFamily: f.bold,
+            color: c.primary,
+        },
+        userName: {
+            fontSize: 16,
+            fontFamily: f.bold,
+            color: c.text,
+        },
+        userEmail: {
+            fontSize: 13,
+            color: c.textMuted,
+            fontFamily: f.regular,
+        },
+        userActions: {
+            padding: 4,
+        },
+        userMeta: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 12,
+        },
+        roleContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.surfaceAlt,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: r.sm,
+        },
+        roleLabel: {
+            fontSize: 12,
+            color: c.textSecondary,
+            fontFamily: f.semibold,
+            marginRight: 6,
+        },
+        dot: {
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: c.borderStrong,
+            marginHorizontal: 8,
+        },
+        statusText: {
+            fontSize: 12,
+            fontFamily: f.semibold,
+        },
+        divider: {
+            height: 1,
+            backgroundColor: c.border,
+            marginVertical: 12,
+        },
+        cardFooter: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'wrap', // Allow chips to wrap if many
+        },
+        assigneesLabel: {
+            fontSize: 12,
+            color: c.textMuted,
+            fontFamily: f.regular,
+            marginRight: 8,
+        },
+        assigneesContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+        },
+        assigneeAvatar: {
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            borderWidth: 2,
+            borderColor: c.surface,
+        },
+        assigneeChip: {
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            borderRadius: 12,
+            borderWidth: 1,
+            marginRight: 6,
+            marginBottom: 2,
+        },
+        assigneeChipText: {
+            fontSize: 10,
+            fontFamily: f.semibold,
+        },
+        noAssignees: {
+            fontSize: 12,
+            color: c.textMuted,
+            fontFamily: f.regular,
+        },
 
-    // --- Invite Card Styles ---
-    inviteCard: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    inviteContent: {
-        flex: 1,
-    },
-    inviteEmail: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
-    },
-    inviteMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    inviteRole: {
-        fontSize: 14,
-        color: '#666',
-        marginRight: 8,
-    },
-    inviteStatus: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    inviteDate: {
-        fontSize: 12,
-        color: '#999',
-    },
-    inviteAction: {
-        paddingLeft: 16,
-    },
-    fab: {
-        position: 'absolute',
-        bottom: 24,
-        right: 20,
-        backgroundColor: '#333',
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 24,
-        borderRadius: 30,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
-    },
-    fabText: {
-        color: '#FFF',
-        fontWeight: 'bold',
-        fontSize: 16,
-        marginLeft: 8,
-    },
+        // --- Invite Card Styles ---
+        inviteCard: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 20,
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        inviteContent: {
+            flex: 1,
+        },
+        inviteEmail: {
+            fontSize: 16,
+            fontFamily: f.bold,
+            color: c.text,
+            marginBottom: 8,
+        },
+        inviteMeta: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 8,
+        },
+        inviteRole: {
+            fontSize: 14,
+            color: c.textSecondary,
+            fontFamily: f.regular,
+            marginRight: 8,
+        },
+        inviteStatus: {
+            fontSize: 14,
+            fontFamily: f.semibold,
+        },
+        inviteDate: {
+            fontSize: 12,
+            color: c.textMuted,
+            fontFamily: f.regular,
+        },
+        inviteAction: {
+            paddingLeft: 16,
+        },
+        fab: {
+            position: 'absolute',
+            bottom: 24,
+            right: 20,
+            backgroundColor: c.primary,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: r.pill,
+            ...sh.md,
+        },
+        fabText: {
+            color: c.textOnPrimary,
+            fontFamily: f.bold,
+            fontSize: 16,
+            marginLeft: 8,
+        },
 
-    // --- Subs Stats Styles ---
-    subsStatsContainer: {
-        flexDirection: 'row',
-        backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        marginBottom: 20,
-        borderRadius: 16,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2,
-    },
-    subsStatBlock: {
-        flex: 1,
-        alignItems: 'flex-start',
-    },
-    subsStatDivider: {
-        width: 1,
-        backgroundColor: '#F0F0F0',
-        marginHorizontal: 20,
-    },
-    subsStatLabel: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 4,
-    },
-    subsStatValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    subsStatTrend: {
-        fontSize: 14,
-        color: '#27AE60',
-        marginTop: 4,
-        fontWeight: '600',
-    },
+        // --- Subs Stats Styles ---
+        subsStatsContainer: {
+            flexDirection: 'row',
+            backgroundColor: c.surface,
+            marginHorizontal: 20,
+            marginBottom: 20,
+            borderRadius: r.lg,
+            padding: 20,
+            ...sh.sm,
+        },
+        subsStatBlock: {
+            flex: 1,
+            alignItems: 'flex-start',
+        },
+        subsStatDivider: {
+            width: 1,
+            backgroundColor: c.border,
+            marginHorizontal: 20,
+        },
+        subsStatLabel: {
+            fontSize: 14,
+            color: c.textSecondary,
+            fontFamily: f.regular,
+            marginBottom: 4,
+        },
+        subsStatValue: {
+            fontSize: 24,
+            fontFamily: f.bold,
+            color: c.text,
+        },
+        subsStatTrend: {
+            fontSize: 14,
+            color: c.success,
+            marginTop: 4,
+            fontFamily: f.semibold,
+        },
 
-    // --- Timeline Styles ---
-    timelineContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 16,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: '#F0F0F0',
-    },
-    timelineDate: {
-        fontSize: 13,
-        color: '#555',
-        fontWeight: '500',
-    },
-    timelineBar: {
-        flex: 1,
-        height: 2,
-        backgroundColor: '#E0E0E0',
-        marginHorizontal: 12,
-        position: 'relative',
-    },
-    timelineArrow: {
-        position: 'absolute',
-        right: 0,
-        top: -3,
-        width: 8,
-        height: 8,
-        borderTopWidth: 2,
-        borderRightWidth: 2,
-        borderColor: '#999',
-        transform: [{ rotate: '45deg' }],
-    },
+        // --- Timeline Styles ---
+        timelineContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 16,
+            paddingTop: 16,
+            borderTopWidth: 1,
+            borderTopColor: c.border,
+        },
+        timelineDate: {
+            fontSize: 13,
+            color: c.textSecondary,
+            fontFamily: f.medium,
+        },
+        timelineBar: {
+            flex: 1,
+            height: 2,
+            backgroundColor: c.border,
+            marginHorizontal: 12,
+            position: 'relative',
+        },
+        timelineArrow: {
+            position: 'absolute',
+            right: 0,
+            top: -3,
+            width: 8,
+            height: 8,
+            borderTopWidth: 2,
+            borderRightWidth: 2,
+            borderColor: c.textMuted,
+            transform: [{ rotate: '45deg' }],
+        },
 
-    // --- Modal Styles ---
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    modalContainer: {
-        backgroundColor: '#ebf8ff', // Light blue bg from screenshot
-        borderRadius: 16,
-        padding: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10,
-        elevation: 10,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    modalTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    modalSubtitle: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 20,
-    },
-    inputGroup: {
-        marginBottom: 16,
-    },
-    label: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 8,
-        textAlign: 'right', // To match screenshot alignment (Label on left, input right in flex?) 
-        // Actually screenshot has labels on left and inputs on right, row layout.
-        // But for simplicity vertical stack is often better or use Row.
-        // Let's stick to standard internal design unless row is strict. 
-        // Screen shot shows: Role [ Right Aligned Box ]
-        // I'll stick to simple vertical for robustness, user can refine alignment.
-    },
-    dropdown: {
-        backgroundColor: '#f0f9ff',
-        borderWidth: 1,
-        borderColor: '#d1e9ff',
-        borderRadius: 8,
-        padding: 12,
-    },
-    modalActions: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        marginTop: 20,
-    },
-    cancelButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#d1e9ff',
-        backgroundColor: '#FFF',
-        marginRight: 10,
-    },
-    cancelButtonText: {
-        color: '#333',
-        fontWeight: '600',
-    },
-    saveButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 8,
-        backgroundColor: '#2D9CDB',
-    },
-    saveButtonText: {
-        color: '#FFF',
-        fontWeight: '600',
-    },
-    caretakerDropdownList: {
-        backgroundColor: '#FFF',
-        borderRadius: 8,
-        marginTop: 4,
-        padding: 8,
-        maxHeight: 200,
-        borderWidth: 1,
-        borderColor: '#eee',
-        elevation: 5,
-    },
-    dropdownSearch: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        padding: 8,
-        marginBottom: 8,
-    },
-    caretakerItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f9f9f9',
-    },
-    checkbox: {
-        width: 18,
-        height: 18,
-        borderWidth: 1,
-        borderColor: '#999',
-        borderRadius: 4,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    checkboxConfigured: {
-        backgroundColor: '#BB6BD9', // Purple from screenshot
-        borderColor: '#BB6BD9',
-    },
-    selectedChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#e0d4fc',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        marginRight: 8,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#BB6BD9',
-    },
-    selectedChipText: {
-        color: '#333',
-        fontSize: 12,
-    }
-});
+        // --- Modal Styles ---
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: c.overlay,
+            justifyContent: 'center',
+            padding: 20,
+        },
+        modalContainer: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 20,
+            ...sh.lg,
+        },
+        modalHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+        },
+        modalTitle: {
+            fontSize: 18,
+            fontFamily: f.bold,
+            color: c.text,
+        },
+        modalSubtitle: {
+            fontSize: 14,
+            color: c.textSecondary,
+            fontFamily: f.regular,
+            marginBottom: 20,
+        },
+        inputGroup: {
+            marginBottom: 16,
+        },
+        label: {
+            fontSize: 14,
+            color: c.textSecondary,
+            fontFamily: f.medium,
+            marginBottom: 8,
+        },
+        input: {
+            backgroundColor: c.surfaceSunken,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: r.md,
+            padding: 12,
+            color: c.text,
+            fontFamily: f.regular,
+            fontSize: 15,
+        },
+        dropdown: {
+            backgroundColor: c.surfaceSunken,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: r.md,
+            padding: 12,
+        },
+        modalActions: {
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            marginTop: 20,
+        },
+        cancelButton: {
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: r.md,
+            borderWidth: 1,
+            borderColor: c.border,
+            backgroundColor: c.surface,
+            marginRight: 10,
+        },
+        cancelButtonText: {
+            color: c.text,
+            fontFamily: f.semibold,
+        },
+        saveButton: {
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: r.md,
+            backgroundColor: c.primary,
+        },
+        saveButtonText: {
+            color: c.textOnPrimary,
+            fontFamily: f.semibold,
+        },
+        caretakerDropdownList: {
+            backgroundColor: c.surface,
+            borderRadius: r.md,
+            marginTop: 4,
+            padding: 8,
+            maxHeight: 200,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        dropdownSearch: {
+            borderBottomWidth: 1,
+            borderBottomColor: c.border,
+            padding: 8,
+            marginBottom: 8,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        caretakerItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: 8,
+            borderBottomWidth: 1,
+            borderBottomColor: c.border,
+        },
+        checkbox: {
+            width: 18,
+            height: 18,
+            borderWidth: 1,
+            borderColor: c.borderStrong,
+            borderRadius: 4,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        checkboxConfigured: {
+            backgroundColor: c.accentViolet,
+            borderColor: c.accentViolet,
+        },
+        selectedChip: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.primarySoft,
+            paddingHorizontal: 10,
+            paddingVertical: 4,
+            borderRadius: r.pill,
+            marginRight: 8,
+            marginBottom: 8,
+            borderWidth: 1,
+            borderColor: c.accentViolet,
+        },
+        selectedChipText: {
+            color: c.text,
+            fontSize: 12,
+            fontFamily: f.medium,
+        }
+    });
+};

@@ -1,14 +1,21 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Image, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert } from '@/services/CrossPlatformAlert';
 import { ENDPOINTS, ROLES } from '../constants/ApiConstants';
 import ApiHelper from '../services/ApiHelper';
 import { registerForPushNotificationsAsync, registerTokenWithBackend } from '../services/notifications';
+import { useTheme } from '../theme/ThemeProvider';
+import { AppText } from '../components/ui/AppText';
+import { Button } from '../components/ui/Button';
 
 const LoginScreen = () => {
     const router = useRouter();
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
@@ -39,7 +46,7 @@ const LoginScreen = () => {
             const role = response.user.role;
             if (role === ROLES.ADMIN) {
                 router.replace('/admin/home');
-            } else if (role === ROLES.CARETAKER) {
+            } else if (role === ROLES.CAREGIVER) {
                 router.replace('/caretaker/home');
             } else if (role === ROLES.PATIENT) {
                 router.replace('/patient/home');
@@ -59,15 +66,17 @@ const LoginScreen = () => {
                 <View style={styles.logoWrapper}>
                     <Image source={require('../assets/images/icon.jpg')} style={styles.appLogo} resizeMode="contain" />
                 </View>
-                <Text style={styles.subtitle}>Welcome Back</Text>
+                <AppText variant="titleLg" style={styles.brand}>Casyomax</AppText>
+                <AppText variant="bodyLg" color="textSecondary" style={styles.subtitle}>Welcome Back</AppText>
             </View>
 
             <View style={styles.formContainer}>
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Email</Text>
+                    <AppText variant="label" style={styles.label}>Email</AppText>
                     <TextInput
                         style={styles.input}
                         placeholder="Enter your email"
+                        placeholderTextColor={colors.textMuted}
                         value={email}
                         onChangeText={setEmail}
                         autoCapitalize="none"
@@ -76,11 +85,12 @@ const LoginScreen = () => {
                 </View>
 
                 <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Password</Text>
+                    <AppText variant="label" style={styles.label}>Password</AppText>
                     <View style={styles.passwordContainer}>
                         <TextInput
                             style={styles.passwordInput}
                             placeholder="Enter your password"
+                            placeholderTextColor={colors.textMuted}
                             value={password}
                             onChangeText={setPassword}
                             secureTextEntry={!showPassword}
@@ -92,35 +102,32 @@ const LoginScreen = () => {
                             <MaterialCommunityIcons
                                 name={showPassword ? 'eye-off' : 'eye'}
                                 size={24}
-                                color="#666"
+                                color={colors.textSecondary}
                             />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.loginButton, loading && styles.disabledButton]}
+                <Button
+                    title="Login"
                     onPress={handleLogin}
-                    disabled={loading}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#FFF" />
-                    ) : (
-                        <Text style={styles.loginButtonText}>Login</Text>
-                    )}
-                </TouchableOpacity>
+                    loading={loading}
+                    fullWidth
+                    size="lg"
+                    style={styles.loginButton}
+                />
 
                 <TouchableOpacity
                     style={styles.forgotPassword}
                     onPress={() => router.push('/auth/forgot-password')}
                 >
-                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    <AppText variant="body" color="primary">Forgot Password?</AppText>
                 </TouchableOpacity>
 
                 <View style={styles.registerContainer}>
-                    <Text style={styles.registerText}>Don't have an account? </Text>
+                    <AppText variant="body" color="textSecondary">Don't have an account? </AppText>
                     <TouchableOpacity onPress={() => router.push('/auth/register')}>
-                        <Text style={styles.registerLink}>Register</Text>
+                        <AppText variant="body" color="primary" weight="bold">Register</AppText>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -128,126 +135,96 @@ const LoginScreen = () => {
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-        justifyContent: 'center',
-        padding: 20,
-    },
-    logoContainer: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    logoWrapper: {
-        marginBottom: 16,
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 4,
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: c.background,
+            justifyContent: 'center',
+            padding: 20,
         },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
-        backgroundColor: '#FFF',
-        borderRadius: 20,
-        padding: 4,
-    },
-    appLogo: {
-        width: 120,
-        height: 120,
-        borderRadius: 16,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 8,
-    },
-    formContainer: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 24,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
+        logoContainer: {
+            alignItems: 'center',
+            marginBottom: 40,
         },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
-    },
-    inputContainer: {
-        marginBottom: 20,
-    },
-    label: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 8,
-        fontWeight: '600',
-    },
-    input: {
-        backgroundColor: '#F5F7FA',
-        borderRadius: 12,
-        padding: 16,
-        fontSize: 16,
-        color: '#333',
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-    },
-    passwordContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F5F7FA',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-    },
-    passwordInput: {
-        flex: 1,
-        padding: 16,
-        fontSize: 16,
-        color: '#333',
-    },
-    eyeButton: {
-        padding: 12,
-    },
-    loginButton: {
-        backgroundColor: '#4A90E2',
-        borderRadius: 12,
-        padding: 16,
-        alignItems: 'center',
-        marginTop: 8,
-    },
-    disabledButton: {
-        backgroundColor: '#A0C4E8',
-    },
-    loginButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    forgotPassword: {
-        alignItems: 'center',
-        marginTop: 16,
-    },
-    forgotPasswordText: {
-        color: '#4A90E2',
-        fontSize: 14,
-    },
-    registerContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-    registerText: {
-        color: '#666',
-        fontSize: 14,
-    },
-    registerLink: {
-        color: '#4A90E2',
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-});
+        logoWrapper: {
+            marginBottom: 16,
+            backgroundColor: c.surface,
+            borderRadius: r.xl,
+            padding: 4,
+            ...sh.md,
+        },
+        appLogo: {
+            width: 120,
+            height: 120,
+            borderRadius: r.lg,
+        },
+        brand: {
+            marginTop: 4,
+        },
+        subtitle: {
+            marginTop: 4,
+        },
+        formContainer: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            padding: 24,
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.md,
+        },
+        inputContainer: {
+            marginBottom: 20,
+        },
+        label: {
+            marginBottom: 8,
+            color: c.text,
+        },
+        input: {
+            backgroundColor: c.surfaceSunken,
+            borderRadius: r.md,
+            padding: 16,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        passwordContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: c.surfaceSunken,
+            borderRadius: r.md,
+            borderWidth: 1,
+            borderColor: c.border,
+        },
+        passwordInput: {
+            flex: 1,
+            padding: 16,
+            fontSize: 16,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        eyeButton: {
+            padding: 12,
+        },
+        loginButton: {
+            marginTop: 8,
+        },
+        forgotPassword: {
+            alignItems: 'center',
+            marginTop: 16,
+        },
+        registerContainer: {
+            flexDirection: 'row',
+            justifyContent: 'center',
+            marginTop: 20,
+        },
+    });
+};
 
 export default LoginScreen;

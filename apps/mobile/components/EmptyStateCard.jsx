@@ -1,51 +1,55 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { useTheme } from '../theme/ThemeProvider';
+import { AppText } from './ui/AppText';
 
 const EmptyStateCard = ({ iconName, message, subMessage }) => {
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
+
     return (
         <View style={styles.container}>
             <View style={styles.iconContainer}>
-                <Ionicons name={iconName} size={80} color="#A0C4E8" />
+                <Ionicons name={iconName} size={64} color={colors.primary} />
             </View>
-            <Text style={styles.message}>{message}</Text>
-            {subMessage && <Text style={styles.subMessage}>{subMessage}</Text>}
+            <AppText variant="title" align="center" style={styles.message}>{message}</AppText>
+            {subMessage && (
+                <AppText variant="body" color="textSecondary" align="center">{subMessage}</AppText>
+            )}
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 32,
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        margin: 16,
-        borderWidth: 1,
-        borderColor: '#E1E4E8',
-        borderStyle: 'dashed',
-    },
-    iconContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#F5F7FA',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 24,
-    },
-    message: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        textAlign: 'center',
-        marginBottom: 8,
-    },
-    subMessage: {
-        fontSize: 14,
-        color: '#888',
-        textAlign: 'center',
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    return StyleSheet.create({
+        container: {
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 32,
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            margin: 16,
+            borderWidth: 1,
+            borderColor: c.border,
+            borderStyle: 'dashed',
+        },
+        iconContainer: {
+            width: 120,
+            height: 120,
+            borderRadius: 60,
+            backgroundColor: c.primarySoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+        },
+        message: {
+            marginBottom: 8,
+        },
+    });
+};
 
 export default EmptyStateCard;

@@ -25,7 +25,7 @@ export default function Index() {
 
                 if (user.role === ROLES.ADMIN) {
                     setInitialRoute('/admin/home');
-                } else if (user.role === ROLES.CARETAKER) {
+                } else if (user.role === ROLES.CAREGIVER) {
                     setInitialRoute('/caretaker/home');
                 } else if (user.role === ROLES.PATIENT) {
                     setInitialRoute('/patient/home');

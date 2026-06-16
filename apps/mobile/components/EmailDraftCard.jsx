@@ -1,10 +1,17 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { StyleSheet, TextInput, View } from 'react-native';
+import { useTheme } from '../theme/ThemeProvider';
+import { AppText } from './ui/AppText';
+import { Button } from './ui/Button';
 
 const EmailDraftCard = ({ recipientName, recipientEmail, subject, initialBody, onAction }) => {
     const [body, setBody] = useState(initialBody || "");
     const [sending, setSending] = useState(false);
+
+    const theme = useTheme();
+    const { colors } = theme;
+    const styles = useMemo(() => makeStyles(theme), [theme]);
 
     const handleSend = async () => {
         setSending(true);
@@ -22,116 +29,99 @@ const EmailDraftCard = ({ recipientName, recipientEmail, subject, initialBody, o
                 colors={['#e0f7fa', '#ffffff']}
                 style={styles.header}
             >
-                <Text style={styles.title}>📧 Draft Email</Text>
+                <AppText variant="subtitle" weight="bold" style={{ color: '#00796b' }}>📧 Draft Email</AppText>
             </LinearGradient>
 
             <View style={styles.content}>
-                <Text style={styles.label}>To:</Text>
-                <Text style={styles.value}>{recipientName} ({recipientEmail})</Text>
+                <AppText variant="caption" color="textMuted" style={styles.label}>To:</AppText>
+                <AppText variant="body" weight="medium" style={styles.value}>{recipientName} ({recipientEmail})</AppText>
 
-                <Text style={styles.label}>Subject:</Text>
-                <Text style={styles.value}>{subject}</Text>
+                <AppText variant="caption" color="textMuted" style={styles.label}>Subject:</AppText>
+                <AppText variant="body" weight="medium" style={styles.value}>{subject}</AppText>
 
-                <Text style={styles.label}>Body:</Text>
+                <AppText variant="caption" color="textMuted" style={styles.label}>Body:</AppText>
                 <TextInput
                     style={styles.input}
                     multiline
                     value={body}
                     onChangeText={setBody}
                     textAlignVertical="top"
+                    placeholderTextColor={colors.textMuted}
                 />
 
                 <View style={styles.actions}>
-                    <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={handleCancel} disabled={sending}>
-                        <Text style={styles.cancelText}>Discard</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={[styles.button, styles.sendButton]} onPress={handleSend} disabled={sending}>
-                        {sending ? (
-                            <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                            <Text style={styles.sendText}>Send Email</Text>
-                        )}
-                    </TouchableOpacity>
+                    <Button
+                        title="Discard"
+                        variant="secondary"
+                        size="sm"
+                        onPress={handleCancel}
+                        disabled={sending}
+                    />
+                    <Button
+                        title="Send Email"
+                        variant="primary"
+                        size="sm"
+                        onPress={handleSend}
+                        disabled={sending}
+                        loading={sending}
+                    />
                 </View>
             </View>
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        overflow: 'hidden',
-        marginVertical: 10,
-        width: '90%',
-        alignSelf: 'center',
-        borderWidth: 1,
-        borderColor: '#eee',
-        elevation: 4,
-    },
-    header: {
-        padding: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    title: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#00796b',
-    },
-    content: {
-        padding: 16,
-    },
-    label: {
-        fontSize: 12,
-        color: '#888',
-        marginTop: 8,
-    },
-    value: {
-        fontSize: 14,
-        color: '#333',
-        fontWeight: '500',
-        marginBottom: 4,
-    },
-    input: {
-        borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        padding: 10,
-        height: 120,
-        marginTop: 8,
-        marginBottom: 16,
-        backgroundColor: '#fafafa',
-        fontSize: 14,
-    },
-    actions: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        gap: 12,
-    },
-    button: {
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderRadius: 8,
-        minWidth: 80,
-        alignItems: 'center',
-    },
-    cancelButton: {
-        backgroundColor: '#f5f5f5',
-    },
-    sendButton: {
-        backgroundColor: '#007bff',
-    },
-    cancelText: {
-        color: '#666',
-        fontWeight: '600',
-    },
-    sendText: {
-        color: '#fff',
-        fontWeight: '600',
-    },
-});
+const makeStyles = (t) => {
+    const c = t.colors;
+    const r = t.radius;
+    const f = t.fonts;
+    const sh = t.shadows;
+    return StyleSheet.create({
+        container: {
+            backgroundColor: c.surface,
+            borderRadius: r.lg,
+            overflow: 'hidden',
+            marginVertical: 10,
+            width: '90%',
+            alignSelf: 'center',
+            borderWidth: 1,
+            borderColor: c.border,
+            ...sh.sm,
+        },
+        header: {
+            padding: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: c.border,
+        },
+        content: {
+            padding: 16,
+        },
+        label: {
+            marginTop: 8,
+        },
+        value: {
+            color: c.text,
+            marginBottom: 4,
+        },
+        input: {
+            borderWidth: 1,
+            borderColor: c.border,
+            borderRadius: r.md,
+            padding: 10,
+            height: 120,
+            marginTop: 8,
+            marginBottom: 16,
+            backgroundColor: c.surfaceSunken,
+            fontSize: 14,
+            color: c.text,
+            fontFamily: f.regular,
+        },
+        actions: {
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            gap: 12,
+        },
+    });
+};
 
 export default EmailDraftCard;

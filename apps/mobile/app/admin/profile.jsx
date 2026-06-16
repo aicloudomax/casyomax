@@ -1,12 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import * as SecureStore from '@/services/SecureStore';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { View } from 'react-native';
+import { AppText } from '../../components/ui/AppText';
+import { Avatar } from '../../components/ui/Avatar';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Screen } from '../../components/ui/Screen';
 import { logoutUser } from '../../services/AuthService';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const AdminProfileScreen = () => {
-    const router = useRouter();
+    const { colors, spacing, radius } = useTheme();
     const [user, setUser] = useState(null);
 
     useEffect(() => {
@@ -28,108 +34,54 @@ const AdminProfileScreen = () => {
         await logoutUser();
     };
 
-    const getInitials = () => {
-        if (!user) return 'AD';
-        const first = user.first_name?.[0] || '';
-        const last = user.last_name?.[0] || '';
-        return (first + last).toUpperCase() || 'AD';
-    };
+    const fullName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Admin User';
 
-    return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <View style={styles.avatarContainer}>
-                    <Text style={styles.avatarText}>{getInitials()}</Text>
-                </View>
-                <Text style={styles.name}>{user ? `${user.first_name} ${user.last_name}` : 'Admin User'}</Text>
-                <Text style={styles.role}>{user?.role?.toUpperCase() || 'ADMINISTRATOR'}</Text>
+    const InfoRow = ({ icon, label, value, last }) => (
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingVertical: spacing.md,
+                borderBottomWidth: last ? 0 : 1,
+                borderBottomColor: colors.border,
+            }}
+        >
+            <View
+                style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.primarySoft,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                }}
+            >
+                <Ionicons name={icon} size={18} color={colors.primary} />
             </View>
-
-            <View style={styles.infoSection}>
-                <View style={styles.infoItem}>
-                    <Text style={styles.label}>Email</Text>
-                    <Text style={styles.value}>{user?.email || 'admin@casyomax.com'}</Text>
-                </View>
-                <View style={styles.infoItem}>
-                    <Text style={styles.label}>Access Level</Text>
-                    <Text style={styles.value}>Full Access</Text>
-                </View>
+            <View style={{ flex: 1 }}>
+                <AppText variant="caption" color="textMuted">{label}</AppText>
+                <AppText variant="bodyLg" weight="medium">{value}</AppText>
             </View>
-
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                <Text style={styles.logoutButtonText}>Logout</Text>
-                <Ionicons name="log-out-outline" size={20} color="#FFF" style={{ marginLeft: 8 }} />
-            </TouchableOpacity>
         </View>
     );
-};
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-        padding: 20,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    avatarContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#4A90E2',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    avatarText: {
-        color: '#FFF',
-        fontSize: 36,
-        fontWeight: 'bold',
-    },
-    name: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    role: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 4,
-    },
-    infoSection: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
-    },
-    infoItem: {
-        marginBottom: 16,
-    },
-    label: {
-        fontSize: 14,
-        color: '#999',
-        marginBottom: 4,
-    },
-    value: {
-        fontSize: 16,
-        color: '#333',
-        fontWeight: '500',
-    },
-    logoutButton: {
-        backgroundColor: '#FF3B30',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 12,
-    },
-    logoutButtonText: {
-        color: '#FFF',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-});
+    return (
+        <Screen scroll edges={['left', 'right']}>
+            <View style={{ alignItems: 'center', marginTop: spacing.xl, marginBottom: spacing.xl }}>
+                <Avatar uri={user?.profile_image_url} name={fullName} size={104} />
+                <AppText variant="titleLg" style={{ marginTop: spacing.lg }}>{fullName}</AppText>
+                <Badge tone="primary" label={user?.role ? user.role.toUpperCase() : 'ADMINISTRATOR'} style={{ marginTop: spacing.sm }} />
+            </View>
+
+            <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
+                <InfoRow icon="mail-outline" label="Email" value={user?.email || 'admin@casyomax.com'} />
+                <InfoRow icon="shield-checkmark-outline" label="Access level" value="Full access" last />
+            </Card>
+
+            <Button title="Log out" icon="log-out-outline" variant="secondary" fullWidth onPress={handleLogout} />
+        </Screen>
+    );
+};
 
 export default AdminProfileScreen;
