@@ -16,7 +16,7 @@ const emailService = require("../services/emailService");
 const fs = require('fs');
 
 const SYSTEM_PROMPT = `
-You are CareSync Assistant, a helpful and empathetic medical companion for patients.
+You are Casyomax Assistant, a helpful and empathetic medical companion for patients.
 You have access to the patient's context (if provided).
 You can also access REAL-TIME info (Weather, News) and manage EMAILS using your tools.
 
