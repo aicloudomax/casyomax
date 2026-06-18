@@ -7,12 +7,14 @@
  */
 const chatModel = require("../models/chatModel");
 const patientModel = require("../models/patientModel");
+const medicationModel = require("../models/medicationModel");
 const medicationScheduleModel = require("../models/medicationScheduleModel");
 const medicationLogsModel = require("../models/medicationLogsModel");
 const caregiverAssignmentsModel = require("../models/caregiverAssignmentsModel");
 const contactModel = require("../models/contactModel"); // NEW: Contacts
 const azureAIService = require("../services/azureAIService");
 const emailService = require("../services/emailService");
+const { DateTime } = require("luxon");
 const fs = require('fs');
 
 const SYSTEM_PROMPT = `
@@ -25,6 +27,18 @@ EMAIL FEATURE GUIDELINES:
 2. If the user explicitly wants to add a contact or if a contact is missing during drafting, call 'add_contact'.
 3. Always check for contacts first. If 'draft_email' returns "Contact not found", ask the user if they want to add them.
 4. When asking to add a contact, get their Name, Email, and Relation.
+
+MEDICATION SCHEDULING (the patient can add their OWN medicines through chat):
+1. If the patient asks to add / schedule / be reminded about a medicine (e.g. "remind me to take Paracetamol 500mg after lunch", "add my BP tablet at night"), help them set it up using the 'add_medication' tool.
+2. Collect: the medicine name, the dosage (optional — ask once), and WHEN to take it. Ask brief follow-up questions ONLY for missing essentials. Keep it very simple — many users are elderly.
+3. Convert meal/relative timing into a specific 24-hour time and STATE the time you chose, using these defaults:
+   - before breakfast 07:30, with/after breakfast 08:30, morning 08:00
+   - before lunch 12:30, lunch 13:00, after lunch 14:00, afternoon 14:00
+   - before dinner 19:30, dinner 20:00, after dinner 20:30, evening 19:00
+   - night / bedtime 22:00
+4. ALWAYS read the plan back and get a clear "yes" BEFORE calling 'add_medication'. Example: "I'll add Paracetamol 500mg every day at 2:00 PM (after lunch). Shall I save it?" Only call the tool after they confirm.
+5. Only a once-daily reminder per medicine is supported right now. If they want it more than once a day, add the medicine once for each time (confirm each one).
+6. After it's saved, briefly confirm and reassure them. Do not output raw JSON.
 
 MEDICAL INFORMATION & CITATIONS (REQUIRED — Apple Guideline 1.4.1):
 Whenever your reply contains ANY health, medical, symptom, medication, dosage, treatment,
@@ -144,6 +158,23 @@ const TOOL_DEFINITIONS = [
                     time_context: { type: "string", description: "When to send (e.g. Tomorrow at 10 AM, In 2 hours)" }
                 },
                 required: ["recipient_name", "message_type", "intent", "time_context"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "add_medication",
+            description: "Add a medicine and a once-daily reminder to the PATIENT'S OWN account. Use when the patient asks to add/schedule/remind them about a medication for themselves. ONLY call this after you have read the details back and the patient has confirmed.",
+            parameters: {
+                type: "object",
+                properties: {
+                    medicine_name: { type: "string", description: "Name of the medicine, e.g. 'Paracetamol'" },
+                    dosage: { type: "string", description: "Dosage if known, e.g. '500mg'. Optional." },
+                    time_of_day: { type: "string", description: "The time to take it in 24-hour HH:MM format, e.g. '14:00'. Derive this from the patient's described timing and confirm it with them first." },
+                    instructions: { type: "string", description: "Optional note such as 'After lunch' or 'Before breakfast'." }
+                },
+                required: ["medicine_name", "time_of_day"]
             }
         }
     }
@@ -374,6 +405,93 @@ const handleSendEmail = async (toEmail, subject, body) => {
     }
 };
 
+// 24h "HH:MM" -> friendly "h:MM AM/PM"
+const to12h = (t) => {
+    const [h, m] = t.split(':');
+    let hour = parseInt(h, 10);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    if (hour > 12) hour -= 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${m} ${ampm}`;
+};
+
+// Compute the schedule's first UTC run + start date in the given timezone
+// (mirrors medicationScheduleController.calculateNextRun so reminders fire the same way).
+const computeScheduleTimes = (timeOfDay, timeZone) => {
+    const [hours, minutes] = timeOfDay.split(':');
+    const validZone = timeZone || 'UTC';
+    let candidate = DateTime.now().setZone(validZone).set({
+        hour: parseInt(hours, 10), minute: parseInt(minutes, 10), second: 0, millisecond: 0,
+    });
+    if (candidate <= DateTime.now().setZone(validZone)) candidate = candidate.plus({ days: 1 });
+    return {
+        scheduled_time_utc: candidate.toUTC().toFormat('yyyy-MM-dd HH:mm:ss'),
+        start_date: DateTime.now().setZone(validZone).toFormat('yyyy-MM-dd'),
+    };
+};
+
+// MVP timezone default (matches handleScheduleMessage). Patients are in this zone for now.
+const MED_DEFAULT_TZ = process.env.DEFAULT_TIMEZONE || 'Asia/Kolkata';
+
+/**
+ * Tool Handler: Add a medication + once-daily schedule to the patient's own account.
+ * Caretakers (if assigned) see it automatically since they view the patient's schedule.
+ */
+const handleAddMedication = async (patientId, userId, args) => {
+    try {
+        const { medicine_name, dosage, time_of_day, instructions } = args || {};
+        if (!medicine_name || !time_of_day) {
+            return "I still need the medicine name and the time of day before I can add it. Could you confirm those?";
+        }
+        const match = String(time_of_day).match(/^(\d{1,2}):(\d{2})$/);
+        if (!match) {
+            return "I couldn't understand the time. Please tell me a time like '2:00 PM' or '14:00'.";
+        }
+        const hh = String(Math.min(23, parseInt(match[1], 10))).padStart(2, '0');
+        const time24 = `${hh}:${match[2]}`;
+
+        // 1. Create the medication on the patient's account.
+        const med = await medicationModel.create({
+            patient_id: patientId,
+            created_by: userId,
+            medicine_name: medicine_name.trim(),
+            dosage: (dosage || '').trim(),
+            form: '',
+            instructions: (instructions || '').trim(),
+        });
+
+        // 2. Create a daily schedule (same fields the caretaker flow uses).
+        const { scheduled_time_utc, start_date } = computeScheduleTimes(time24, MED_DEFAULT_TZ);
+        await medicationScheduleModel.createSchedule({
+            medication_id: med.id,
+            created_by: userId,
+            schedule_type: 'daily',
+            time_of_day: time24,
+            start_date,
+            end_date: null,
+            days_of_week: [0, 1, 2, 3, 4, 5, 6],
+            notes: (instructions || '').trim() || null,
+            scheduled_time_utc,
+            schedule_timezone: MED_DEFAULT_TZ,
+        });
+
+        // 3. If a caretaker is assigned, mention they'll see it too.
+        let caretakerNote = "";
+        try {
+            const caregivers = await caregiverAssignmentsModel.getCaretakersForPatient(patientId);
+            if (caregivers && caregivers.length > 0) {
+                caretakerNote = " Your caretaker will be able to see this in their dashboard.";
+            }
+        } catch (e) { /* non-fatal */ }
+
+        const dosePart = (dosage || '').trim() ? ` ${dosage.trim()}` : "";
+        return `Done — I've added ${medicine_name.trim()}${dosePart} to your medications with a daily reminder at ${to12h(time24)}.${caretakerNote}`;
+    } catch (error) {
+        console.error("Add Medication Error:", error);
+        return "Sorry, I couldn't add the medication just now. Please try again.";
+    }
+};
+
 /**
  * Handle Text Chat
  */
@@ -433,6 +551,8 @@ exports.handleTextChat = async (req, res) => {
                 const mvpTimezone = 'Asia/Kolkata';
                 // Pass patientId to ensure correct Sender Name
                 return await handleScheduleMessage(currentUserId, patientId, args.recipient_name, args.message_type, args.intent, args.time_context, mvpTimezone);
+            } else if (fnName === "add_medication") {
+                return await handleAddMedication(patientId, currentUserId, args);
             }
             return null;
         };
