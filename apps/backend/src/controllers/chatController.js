@@ -30,13 +30,13 @@ EMAIL FEATURE GUIDELINES:
 
 MEDICATION SCHEDULING (the patient can add their OWN medicines through chat):
 1. If the patient asks to add / schedule / be reminded about a medicine (e.g. "remind me to take Paracetamol 500mg after lunch", "add my BP tablet at night"), help them set it up using the 'add_medication' tool.
-2. Collect: the medicine name, the dosage (optional — ask once), and WHEN to take it. Ask brief follow-up questions ONLY for missing essentials. Keep it very simple — many users are elderly.
+2. Collect: the medicine name, the dosage (optional), the FORM (tablet, syrup, capsule, drops, injection, etc. — ask if not stated), and WHEN to take it. Ask brief follow-up questions ONLY for missing essentials, one at a time. Keep it very simple — many users are elderly.
 3. Convert meal/relative timing into a specific 24-hour time and STATE the time you chose, using these defaults:
    - before breakfast 07:30, with/after breakfast 08:30, morning 08:00
    - before lunch 12:30, lunch 13:00, after lunch 14:00, afternoon 14:00
    - before dinner 19:30, dinner 20:00, after dinner 20:30, evening 19:00
    - night / bedtime 22:00
-4. ALWAYS read the plan back and get a clear "yes" BEFORE calling 'add_medication'. Example: "I'll add Paracetamol 500mg every day at 2:00 PM (after lunch). Shall I save it?" Only call the tool after they confirm.
+4. ALWAYS read the plan back and get a clear "yes" BEFORE calling 'add_medication'. Example: "I'll add Paracetamol 500mg (tablet) every day at 2:00 PM (after lunch). Shall I save it?" Only call the tool after they confirm.
 5. Only a once-daily reminder per medicine is supported right now. If they want it more than once a day, add the medicine once for each time (confirm each one).
 6. After it's saved, briefly confirm and reassure them. Do not output raw JSON.
 
@@ -171,6 +171,7 @@ const TOOL_DEFINITIONS = [
                 properties: {
                     medicine_name: { type: "string", description: "Name of the medicine, e.g. 'Paracetamol'" },
                     dosage: { type: "string", description: "Dosage if known, e.g. '500mg'. Optional." },
+                    form: { type: "string", description: "The medicine form, e.g. 'Tablet', 'Syrup', 'Capsule', 'Drops', 'Injection'. Ask the patient if not mentioned." },
                     time_of_day: { type: "string", description: "The time to take it in 24-hour HH:MM format, e.g. '14:00'. Derive this from the patient's described timing and confirm it with them first." },
                     instructions: { type: "string", description: "Optional note such as 'After lunch' or 'Before breakfast'." }
                 },
@@ -233,9 +234,7 @@ const buildContext = async (patientId) => {
     let contactsContext = "No personal contacts found.";
     try {
         if (profile.user_id) {
-            console.log("DEBUG: building context for user_id:", profile.user_id);
             const contacts = await contactModel.getContactsByUserId(profile.user_id);
-            console.log("DEBUG: fetched contacts for context:", contacts ? contacts.length : 0);
             if (contacts && contacts.length > 0) {
                 contactsContext = contacts.map(c =>
                     `- ${c.name} (${c.email}) [${c.relation || 'No relation'}]`
@@ -283,18 +282,13 @@ const cleanTextForSpeech = (text) => {
  */
 const handleDraftEmail = async (patientId, recipientName, intent) => {
     try {
-        console.log(`DEBUG: handleDraftEmail called for patientId: ${patientId}, recipient: ${recipientName}`);
-
         // 1. Get User ID from Patient ID
         const patient = await patientModel.getPatientById(patientId);
         if (!patient) {
             console.error("DEBUG: Patient not found for ID:", patientId);
             return "Error: Patient not found.";
         }
-        console.log("DEBUG: Patient found:", patient.first_name, "User ID:", patient.user_id);
-
         const contacts = await contactModel.searchContacts(patient.user_id, recipientName);
-        console.log("DEBUG: Search results:", contacts);
 
         if (!contacts || contacts.length === 0) {
             return `I couldn't find a contact named "${recipientName}". Would you like to add them?`;
@@ -439,7 +433,7 @@ const MED_DEFAULT_TZ = process.env.DEFAULT_TIMEZONE || 'Asia/Kolkata';
  */
 const handleAddMedication = async (patientId, userId, args) => {
     try {
-        const { medicine_name, dosage, time_of_day, instructions } = args || {};
+        const { medicine_name, dosage, form, time_of_day, instructions } = args || {};
         if (!medicine_name || !time_of_day) {
             return "I still need the medicine name and the time of day before I can add it. Could you confirm those?";
         }
@@ -531,8 +525,6 @@ exports.handleTextChat = async (req, res) => {
             const fnName = toolCall.function.name;
             const args = JSON.parse(toolCall.function.arguments);
 
-            console.log(`🛠️ Custom Tool Exec: ${fnName} (User ID: ${currentUserId})`, args);
-
             if (!currentUserId) return "Error: User not found.";
 
             // TIER RESTRICTION: Block email features for Free users
@@ -601,6 +593,15 @@ exports.handleTextChat = async (req, res) => {
 
     } catch (error) {
         console.error("Chat Error:", error);
+        // Azure OpenAI content filter can flag benign medical wording (doses,
+        // symptoms, etc.). Don't 500 — reply gracefully so the chat keeps working.
+        const msg = (error && error.message) || "";
+        if (msg.includes("content management policy") || msg.includes("content_filter") || msg.includes("ResponsibleAIPolicy")) {
+            return res.json({
+                message: "Sorry, I couldn't process that one. Could you try rephrasing it? For anything medical, please also check with your doctor or caretaker.",
+                messageId: null
+            });
+        }
         res.status(500).json({ error: "Failed to process chat" });
     }
 };
