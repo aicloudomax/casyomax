@@ -26,6 +26,10 @@ const BRAND = {
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
+// Store listings for the Casyomax app.
+const PLAY_URL = "https://play.google.com/store/apps/details?id=com.casyomax.app";
+const APP_STORE_URL = "https://apps.apple.com/app/id6758986276";
+
 const roleLabel = (role) => {
     if (!role) return "member";
     if (role === "caregiver") return "Caretaker";
@@ -89,13 +93,23 @@ const renderEmail = ({ heading, bodyHtml }) => `
 </html>
 `;
 
-const ctaButton = (label, href) => `
-  <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px auto;">
+// Two store buttons (Google Play filled, App Store outlined), stacked + centered.
+const storeButtons = () => `
+  <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:26px auto 22px;">
     <tr>
       <td align="center" bgcolor="${BRAND.primary}" style="border-radius:12px;">
-        <a href="${href}" target="_blank"
-           style="display:inline-block; padding:14px 32px; font-family:${FONT}; font-size:16px; font-weight:700; color:#FFFFFF; text-decoration:none; border-radius:12px;">
-          ${label}
+        <a href="${PLAY_URL}" target="_blank"
+           style="display:inline-block; padding:14px 30px; font-family:${FONT}; font-size:15px; font-weight:700; color:#FFFFFF; text-decoration:none; border-radius:12px;">
+          Get it on Google Play
+        </a>
+      </td>
+    </tr>
+    <tr><td style="height:12px; line-height:12px; font-size:0;">&nbsp;</td></tr>
+    <tr>
+      <td align="center" style="border:1.5px solid ${BRAND.primary}; border-radius:12px;">
+        <a href="${APP_STORE_URL}" target="_blank"
+           style="display:inline-block; padding:12px 30px; font-family:${FONT}; font-size:15px; font-weight:700; color:${BRAND.primary}; text-decoration:none; border-radius:12px;">
+          Download on the App Store
         </a>
       </td>
     </tr>
@@ -110,7 +124,7 @@ exports.sendWelcomeEmail = async (toEmail, role) => {
 
     const label = roleLabel(role);
     const subject = `You're invited to ${BRAND.name}`;
-    const plainText = `Welcome to ${BRAND.name}!\n\nYou have been invited to join as a ${label}.\n\n${BRAND.name} helps you manage medication schedules, coordinate care, and stay connected.\n\nPlease download our mobile app to accept this invitation and get started.\n\nBest regards,\nThe ${BRAND.name} Team`;
+    const plainText = `Welcome to ${BRAND.name}!\n\nYou have been invited to join as a ${label}.\n\n${BRAND.name} helps you manage medication schedules, coordinate care, and stay connected.\n\nDownload the app to accept this invitation and get started:\nGoogle Play: ${PLAY_URL}\nApp Store: ${APP_STORE_URL}\n\nBest regards,\nThe ${BRAND.name} Team`;
 
     const body = `
         <p style="margin:0 0 16px;">Hello,</p>
@@ -118,7 +132,7 @@ exports.sendWelcomeEmail = async (toEmail, role) => {
           <strong style="color:${BRAND.primary};">${label}</strong>.</p>
         <p style="margin:0 0 16px; color:${BRAND.text2};">${BRAND.name} helps you manage medication schedules, coordinate care, and stay connected with the people you care for.</p>
         <p style="margin:0 0 8px; color:${BRAND.text2};">Download the mobile app to accept your invitation and get started.</p>
-        ${ctaButton("Download the App", "https://play.google.com/store")}
+        ${storeButtons()}
         <p style="margin:0 0 6px; color:${BRAND.text2}; font-size:14px;">If you have any questions, please contact your administrator.</p>
         <p style="margin:16px 0 0;">Best regards,<br/><strong>The ${BRAND.name} Team</strong></p>
     `;
