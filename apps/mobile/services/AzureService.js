@@ -95,7 +95,10 @@ const AzureService = {
                     type: 'audio/m4a', // Expo records as m4a/aac by default on Android
                     name: 'recording.m4a',
                 });
-                headers['Content-Type'] = 'multipart/form-data';
+                // NOTE: do NOT set Content-Type manually. React Native adds
+                // "multipart/form-data; boundary=..." automatically when the body
+                // is FormData; setting it by hand drops the boundary and the
+                // backend (multer) then can't parse the uploaded audio file.
             }
 
             const url = `${API_BASE_URL}${ENDPOINTS.VOICE.TRANSCRIBE}`;

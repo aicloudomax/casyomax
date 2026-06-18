@@ -48,6 +48,7 @@ export default function PatientLayout() {
                 }}
             />
             <Stack.Screen name="profile" options={{ title: 'My Profile', presentation: 'modal' }} />
+            <Stack.Screen name="medications" options={{ headerShown: false }} />
         </Stack>
     );
 }

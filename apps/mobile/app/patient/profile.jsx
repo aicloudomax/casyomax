@@ -11,6 +11,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Screen } from '../../components/ui/Screen';
+import EditProfileModal from '../../components/EditProfileModal';
 import { ENDPOINTS } from '../../constants/ApiConstants';
 import ApiHelper from '../../services/ApiHelper';
 import { deleteAccount, logoutUser } from '../../services/AuthService';
@@ -30,6 +31,8 @@ const PatientProfileScreen = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [password, setPassword] = useState('');
     const [deleting, setDeleting] = useState(false);
+    const [editVisible, setEditVisible] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
 
     useEffect(() => {
         fetchUserProfile();
@@ -56,8 +59,18 @@ const PatientProfileScreen = () => {
         }
     };
 
-    const handleLogout = async () => {
-        await logoutUser();
+    const handleLogout = () => {
+        Alert.alert('Log out', 'Are you sure you want to log out?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Log out',
+                style: 'destructive',
+                onPress: async () => {
+                    setLoggingOut(true);
+                    await logoutUser();
+                },
+            },
+        ]);
     };
 
     const confirmDelete = async () => {
@@ -150,14 +163,28 @@ const PatientProfileScreen = () => {
                 <Avatar uri={user.profile_image_url} name={fullName} size={104} />
                 <AppText variant="titleLg" style={{ marginTop: spacing.lg }}>{fullName}</AppText>
                 <Badge tone="primary" label={roleLabel(user.role)} style={{ marginTop: spacing.sm }} />
+                <Button
+                    title="Edit profile"
+                    icon="create-outline"
+                    variant="secondary"
+                    onPress={() => setEditVisible(true)}
+                    style={{ marginTop: spacing.lg }}
+                />
             </View>
+
+            <EditProfileModal
+                visible={editVisible}
+                user={user}
+                onClose={() => setEditVisible(false)}
+                onSaved={(u) => setUser(u)}
+            />
 
             <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
                 <InfoRow icon="mail-outline" label="Email" value={user.email} />
                 <InfoRow icon="call-outline" label="Phone" value={user.phone} last />
             </Card>
 
-            <ActionRow icon="time-outline" label="Medication History" onPress={() => router.push('/patient/medication-history')} />
+            <ActionRow icon="medkit-outline" label="My Medicines & Schedule" onPress={() => router.push('/patient/medications')} />
             <ActionRow icon="people-outline" label="My Contacts" onPress={() => router.push('/patient/contacts')} />
 
             <View style={{ marginTop: spacing.md }}>
@@ -166,6 +193,7 @@ const PatientProfileScreen = () => {
                     icon="log-out-outline"
                     variant="secondary"
                     fullWidth
+                    loading={loggingOut}
                     onPress={handleLogout}
                     style={{ marginBottom: spacing.md }}
                 />

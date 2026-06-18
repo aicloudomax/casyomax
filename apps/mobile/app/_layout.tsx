@@ -23,6 +23,7 @@ import { buildNavTheme } from '@/theme/navigationTheme';
 import { MenuProvider } from 'react-native-popup-menu';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
+import { toastConfig } from '@/components/toastConfig';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -54,7 +55,7 @@ export default function RootLayout() {
               <Stack.Screen name="auth/reset-password" options={{ headerShown: false }} />
             </Stack>
             <StatusBar style="auto" />
-            <Toast />
+            <Toast config={toastConfig} />
           </NavThemeProvider>
         </AppThemeProvider>
       </MenuProvider>

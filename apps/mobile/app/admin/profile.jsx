@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from '@/services/SecureStore';
+import { Alert } from '@/services/CrossPlatformAlert';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { AppText } from '../../components/ui/AppText';
@@ -8,12 +9,15 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Screen } from '../../components/ui/Screen';
+import EditProfileModal from '../../components/EditProfileModal';
 import { logoutUser } from '../../services/AuthService';
 import { useTheme } from '../../theme/ThemeProvider';
 
 const AdminProfileScreen = () => {
     const { colors, spacing, radius } = useTheme();
     const [user, setUser] = useState(null);
+    const [editVisible, setEditVisible] = useState(false);
+    const [loggingOut, setLoggingOut] = useState(false);
 
     useEffect(() => {
         fetchUserData();
@@ -30,8 +34,18 @@ const AdminProfileScreen = () => {
         }
     };
 
-    const handleLogout = async () => {
-        await logoutUser();
+    const handleLogout = () => {
+        Alert.alert('Log out', 'Are you sure you want to log out?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Log out',
+                style: 'destructive',
+                onPress: async () => {
+                    setLoggingOut(true);
+                    await logoutUser();
+                },
+            },
+        ]);
     };
 
     const fullName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Admin User';
@@ -72,14 +86,28 @@ const AdminProfileScreen = () => {
                 <Avatar uri={user?.profile_image_url} name={fullName} size={104} />
                 <AppText variant="titleLg" style={{ marginTop: spacing.lg }}>{fullName}</AppText>
                 <Badge tone="primary" label={user?.role ? user.role.toUpperCase() : 'ADMINISTRATOR'} style={{ marginTop: spacing.sm }} />
+                <Button
+                    title="Edit profile"
+                    icon="create-outline"
+                    variant="secondary"
+                    onPress={() => setEditVisible(true)}
+                    style={{ marginTop: spacing.lg }}
+                />
             </View>
+
+            <EditProfileModal
+                visible={editVisible}
+                user={user}
+                onClose={() => setEditVisible(false)}
+                onSaved={(u) => setUser(u)}
+            />
 
             <Card padded={false} style={{ paddingHorizontal: spacing.lg, marginBottom: spacing.xl }}>
                 <InfoRow icon="mail-outline" label="Email" value={user?.email || 'admin@casyomax.com'} />
                 <InfoRow icon="shield-checkmark-outline" label="Access level" value="Full access" last />
             </Card>
 
-            <Button title="Log out" icon="log-out-outline" variant="secondary" fullWidth onPress={handleLogout} />
+            <Button title="Log out" icon="log-out-outline" variant="secondary" fullWidth loading={loggingOut} onPress={handleLogout} />
         </Screen>
     );
 };

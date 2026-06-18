@@ -568,9 +568,17 @@ const PatientHomeScreen = () => {
                 playsInSilentModeIOS: true,
             });
 
-            const { recording: newRecording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
+            // isMeteringEnabled is required for status.metering to be populated;
+            // without it the silence/speech detection below never sees audio levels
+            // and wrongly concludes "no speech detected", discarding the recording.
+            const { recording: newRecording } = await Audio.Recording.createAsync({
+                ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+                isMeteringEnabled: true,
+            });
+            // Ensure the status callback fires often enough to track speech/silence.
+            try {
+                await newRecording.setProgressUpdateInterval(250);
+            } catch (e) { /* non-fatal */ }
 
             // Silence detection variables
             const SILENCE_THRESHOLD_DB = -50;

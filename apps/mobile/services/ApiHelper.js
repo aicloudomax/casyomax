@@ -21,45 +21,18 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        console.log("\n================= 📤 API REQUEST =================\n");
-        console.log(`➡️  ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-        console.log("🔑 Token:", token ? "Bearer ..." + token.slice(-10) : "No token");
-        console.log("🧾 Payload:");
-        console.log(JSON.stringify(config.data || {}, null, 2));
-        console.log("\n==================================================\n");
         return config;
     },
-    (error) => {
-        console.log("❌ Request Error:", error?.message || error);
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
 // Response Interceptor
 api.interceptors.response.use(
-    (response) => {
-        console.log("\n================= ✅ API RESPONSE =================\n");
-        console.log(`➡️  ${response.config.method?.toUpperCase()} ${response.config.baseURL}${response.config.url}`);
-        console.log(`📥 Status: ${response.status}`);
-        console.log("📄 Data:");
-        const replacer = (key, value) => {
-            // Only truncate the heavy audio data
-            if (key === 'audioBase64') {
-                return '[AUDIO DATA TRUNCATED]';
-            }
-            return value;
-        };
-        console.log(JSON.stringify(response.data || {}, replacer, 2));
-        console.log("\n===================================================\n");
-        return response;
-    },
+    (response) => response,
     (error) => {
-        console.log("\n================= ❌ API ERROR =================\n");
-
         // Handle 401 Unauthorized - Session Expired
         if (error.response?.status === 401 && !isLoggingOut) {
             isLoggingOut = true;
-            console.log("🔐 Session expired - triggering auto-logout");
             Toast.show({
                 type: 'error',
                 text1: 'Session Expired',
@@ -72,22 +45,6 @@ api.interceptors.response.use(
                 isLoggingOut = false;
             }, 500);
         }
-
-        if (error.response) {
-            console.log(`➡️  ${error.config?.method?.toUpperCase()} ${error.config?.baseURL}${error.config?.url}`);
-            console.log(`📥 Status: ${error.response.status}`);
-            console.log("📄 Error Data:");
-            console.log(JSON.stringify(error.response.data || {}, null, 2));
-        } else if (error.request) {
-            console.log("📡 No Response Received (Network Error)");
-            console.log("Make sure your backend is running and accessible.");
-            if (API_BASE_URL && API_BASE_URL.includes('localhost')) {
-                console.log("⚠️  Warning: You are using 'localhost'. For Android Emulator, use '10.0.2.2'.");
-            }
-        } else {
-            console.log("❗ Unexpected Error:", error.message || error);
-        }
-        console.log("\n================================================\n");
         return Promise.reject(error);
     }
 );
