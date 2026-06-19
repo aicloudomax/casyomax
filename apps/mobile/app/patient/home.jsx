@@ -629,7 +629,9 @@ const PatientHomeScreen = () => {
                     if (db > SILENCE_THRESHOLD_DB) {
                         lastActiveTime = Date.now(); // Reset timer if sound detected
                         hasUserSpokenRef.current = true; // Mark that user is speaking
-                    } else if (Date.now() - lastActiveTime > SILENCE_DURATION_MS) {
+                    } else if (hasUserSpokenRef.current && Date.now() - lastActiveTime > SILENCE_DURATION_MS) {
+                        // Only auto-stop once the user has actually spoken, so a pause
+                        // before they start talking doesn't end the recording early.
                         newRecording.setOnRecordingStatusUpdate(null);
                         await stopRecording();
                     }
@@ -653,7 +655,9 @@ const PatientHomeScreen = () => {
         }
     };
 
-    const stopRecording = async () => {
+    // forceUpload=true is used by the manual "Done" button: the user explicitly
+    // said they're finished, so always send the clip regardless of metering.
+    const stopRecording = async (forceUpload = false) => {
         setIsRecording(false);
         const currentRec = recordingRef.current;
         if (!currentRec) return;
@@ -670,7 +674,8 @@ const PatientHomeScreen = () => {
             // let the backend transcription decide, rather than silently dropping it.
             const durationMs = Date.now() - recordStartRef.current;
             const MIN_AUDIO_MS = 700;
-            const shouldUpload = hasUserSpokenRef.current
+            const shouldUpload = forceUpload
+                || hasUserSpokenRef.current
                 || (!meteringWorksRef.current && durationMs > MIN_AUDIO_MS);
 
             if (shouldUpload && uri) {
@@ -740,11 +745,15 @@ const PatientHomeScreen = () => {
             const text = await AzureService.transcribeSpeech(uri);
 
             if (!text || text.startsWith('Error:')) {
-                console.warn("Transcription failed:", text);
+                // Exit voice mode instead of silently re-recording in a loop (which
+                // looks like "listening forever, nothing happens"). Let the user
+                // explicitly tap the mic again to retry.
+                voiceModeRef.current = false;
+                setIsVoiceMode(false);
                 Toast.show({
                     type: 'info',
-                    text1: 'Info',
-                    text2: 'Could not understand audio. Please try again.'
+                    text1: "Didn't catch that",
+                    text2: 'Please tap the mic and try again.'
                 });
                 return;
             }
@@ -989,6 +998,7 @@ const PatientHomeScreen = () => {
                     mode={mode}
                     audioLevel={audioLevel}
                     onClose={cancelRecording}
+                    onStop={() => stopRecording(true)}
                 />
             </Modal>
         );

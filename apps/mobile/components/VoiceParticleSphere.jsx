@@ -117,7 +117,7 @@ const Particle = ({ data, time, audioLevel, touchX, touchY, isTouching, mode }) 
     return <Animated.View style={[styles.particle, style, { width: data.size, height: data.size, borderRadius: data.size / 2 }]} />;
 };
 
-const VoiceParticleSphere = ({ mode = 'listening', audioLevel = 0, onClose }) => {
+const VoiceParticleSphere = ({ mode = 'listening', audioLevel = 0, onClose, onStop }) => {
     const particles = useMemo(() => generateParticles(PARTICLE_COUNT), []);
 
     // Shared Values
@@ -161,7 +161,7 @@ const VoiceParticleSphere = ({ mode = 'listening', audioLevel = 0, onClose }) =>
 
     const getStatusText = () => {
         switch (mode) {
-            case 'listening': return "I'm Listening...";
+            case 'listening': return "I'm listening — tap ✓ when done";
             case 'processing': return "Processing...";
             case 'speaking': return "Speaking...";
             default: return "Tap to speak";
@@ -191,9 +191,19 @@ const VoiceParticleSphere = ({ mode = 'listening', audioLevel = 0, onClose }) =>
 
             <Text style={styles.statusText}>{getStatusText()}</Text>
 
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                <Ionicons name="close" size={24} color="#FFF" />
-            </TouchableOpacity>
+            <View style={styles.controls}>
+                {/* Cancel — discards the recording */}
+                <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                    <Ionicons name="close" size={24} color="#FFF" />
+                </TouchableOpacity>
+
+                {/* Done — stop and send what was said. Only while recording. */}
+                {mode === 'listening' && onStop && (
+                    <TouchableOpacity style={styles.doneButton} onPress={onStop}>
+                        <Ionicons name="checkmark" size={30} color="#FFF" />
+                    </TouchableOpacity>
+                )}
+            </View>
         </View>
     );
 };
@@ -227,13 +237,27 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         textTransform: 'uppercase',
     },
-    closeButton: {
+    controls: {
         position: 'absolute',
         bottom: 60,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 28,
+    },
+    closeButton: {
         width: 56,
         height: 56,
         borderRadius: 28,
         backgroundColor: 'rgba(255,255,255,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    doneButton: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#4F46E5',
         justifyContent: 'center',
         alignItems: 'center',
     },
