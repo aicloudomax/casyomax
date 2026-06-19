@@ -92,6 +92,9 @@ const PatientHomeScreen = () => {
     const recordingRef = useRef(null); // Ref for robust cleanup
     const voiceModeRef = useRef(false); // Ref for continuous conversation loop
     const hasUserSpokenRef = useRef(false); // Ref to track if user spoke
+    const recordStartRef = useRef(0); // When the current recording started (ms)
+    const meteringWorksRef = useRef(false); // Did the device ever report a real metering value?
+    const patientIdRef = useRef(null); // Mirror of patientId for use inside interval closures
     const [audioLevel, setAudioLevel] = useState(0); // Normalized 0-1
 
     const [isProcessing, setIsProcessing] = useState(false);
@@ -179,26 +182,38 @@ const PatientHomeScreen = () => {
         const POLL_MS = 20000; // 20s
         const interval = setInterval(() => {
             fetchHistory();
+            // Self-heal: if the profile never loaded, keep trying so the chat
+            // doesn't stay stuck on "profile not loaded" until an app restart.
+            if (!patientIdRef.current) fetchPatientId();
         }, POLL_MS);
         return () => clearInterval(interval);
     }, []);
 
-    const fetchPatientId = async () => {
+    // Fetch the patient profile, retrying a few times before giving up. A single
+    // transient failure (e.g. a network blip or the backend mid-restart) must not
+    // permanently wedge the screen with "profile not loaded" — which previously
+    // could only be cleared by reinstalling the app.
+    const fetchPatientId = async (attempt = 0) => {
+        const MAX_ATTEMPTS = 4;
         try {
             const userDataStr = await SecureStore.getItemAsync('userData');
-            console.log("userDataStr", userDataStr);
-            if (userDataStr) {
-                const user = JSON.parse(userDataStr);
-                const response = await ApiHelper.get(`${ENDPOINTS.PATIENTS}/user/${user.id}`);
-                console.log("response", response);
-                if (response.success && response.patient) {
-                    setPatientId(response.patient.patient_id);
-                } else {
-                    console.error("Could not fetch patient profile for user:", user.id);
-                }
+            if (!userDataStr) return; // Not logged in yet
+            const user = JSON.parse(userDataStr);
+            const response = await ApiHelper.get(`${ENDPOINTS.PATIENTS}/user/${user.id}`);
+            if (response.success && response.patient) {
+                patientIdRef.current = response.patient.patient_id;
+                setPatientId(response.patient.patient_id);
+                return;
             }
+            throw new Error('Profile response was not successful');
         } catch (error) {
-            console.error("Error fetching patient ID:", error);
+            if (attempt < MAX_ATTEMPTS) {
+                // Backoff: 1s, 2s, 3s, 4s
+                const delay = 1000 * (attempt + 1);
+                setTimeout(() => fetchPatientId(attempt + 1), delay);
+            } else {
+                console.error("Could not load patient profile after retries:", error?.message);
+            }
         }
     };
 
@@ -583,42 +598,46 @@ const PatientHomeScreen = () => {
             // Silence detection variables
             const SILENCE_THRESHOLD_DB = -50;
             const SILENCE_DURATION_MS = 3000;
+            const MAX_RECORD_MS = 15000; // Hard cap so a no-metering device can't record forever
             let lastActiveTime = Date.now();
 
             // Setup metering callback
             newRecording.setOnRecordingStatusUpdate(async (status) => {
-                if (status.isRecording) {
-                    const db = status.metering ?? -160;
+                if (!status.isRecording) return;
 
-                    // Normalize for UI
-                    const minDb = -60;
-                    const normalized = Math.max(0, (db - minDb) / (0 - minDb));
-                    setAudioLevel(normalized);
+                // Some Android devices don't report metering even with it enabled.
+                // Detect whether we ever get a real value so stopRecording knows
+                // whether silence-detection can be trusted as an upload gate.
+                const hasMetering = typeof status.metering === 'number' && status.metering > -160;
+                if (hasMetering) meteringWorksRef.current = true;
+                const db = hasMetering ? status.metering : -160;
 
-                    // Silence Detection Logic
+                // Normalize for UI
+                const minDb = -60;
+                const normalized = Math.max(0, (db - minDb) / (0 - minDb));
+                setAudioLevel(normalized);
+
+                // Hard time cap (clear callback first to avoid double-stop)
+                if (Date.now() - recordStartRef.current > MAX_RECORD_MS) {
+                    newRecording.setOnRecordingStatusUpdate(null);
+                    await stopRecording();
+                    return;
+                }
+
+                // Silence-based auto-stop only when the device actually reports levels.
+                if (hasMetering) {
                     if (db > SILENCE_THRESHOLD_DB) {
                         lastActiveTime = Date.now(); // Reset timer if sound detected
                         hasUserSpokenRef.current = true; // Mark that user is speaking
-                    } else {
-                        const silenceDuration = Date.now() - lastActiveTime;
-                        if (silenceDuration > SILENCE_DURATION_MS) {
-                            console.log("Auto-stopping due to silence");
-                            // We need to stop. Since this is a callback, we should be careful.
-                            // We can call stopRecording, but we need to ensure we don't call it multiple times.
-                            // The easiest way is to remove the callback first or check a flag.
-                            // But stopRecording handles idempotency via recordingRef check.
-                            // However, we can't easily access the latest `stopRecording` closure from here 
-                            // if it depends on state, but ours uses refs mostly.
-                            // Better to just call strict stop logic here.
-
-                            // To avoid loop, clear callback immediately
-                            newRecording.setOnRecordingStatusUpdate(null);
-                            await stopRecording();
-                        }
+                    } else if (Date.now() - lastActiveTime > SILENCE_DURATION_MS) {
+                        newRecording.setOnRecordingStatusUpdate(null);
+                        await stopRecording();
                     }
                 }
             });
 
+            recordStartRef.current = Date.now();
+            meteringWorksRef.current = false;
             recordingRef.current = newRecording;
             setRecording(newRecording);
             setIsRecording(true);
@@ -645,11 +664,18 @@ const PatientHomeScreen = () => {
             recordingRef.current = null;
             setRecording(null); // Clear state immediately
 
-            // Smart Exit: Only upload if user actually spoke
-            if (hasUserSpokenRef.current) {
-                if (uri) handleVoiceUpload(uri);
+            // Decide whether to upload. When the device reported audio levels we
+            // trust the speech flag. When it never reported metering at all, we
+            // can't detect speech — so upload anything longer than a brief tap and
+            // let the backend transcription decide, rather than silently dropping it.
+            const durationMs = Date.now() - recordStartRef.current;
+            const MIN_AUDIO_MS = 700;
+            const shouldUpload = hasUserSpokenRef.current
+                || (!meteringWorksRef.current && durationMs > MIN_AUDIO_MS);
+
+            if (shouldUpload && uri) {
+                handleVoiceUpload(uri);
             } else {
-                console.log("No speech detected. Exiting voice mode.");
                 setIsVoiceMode(false);
                 voiceModeRef.current = false;
                 Toast.show({

@@ -16,22 +16,26 @@ export default function PatientMedicationsScreen() {
         fetchPatientId();
     }, []);
 
-    const fetchPatientId = async () => {
+    const fetchPatientId = async (attempt = 0) => {
+        const MAX_ATTEMPTS = 4;
         try {
             const userDataStr = await SecureStore.getItemAsync('userData');
-            if (userDataStr) {
-                const user = JSON.parse(userDataStr);
-                const response = await ApiHelper.get(`${ENDPOINTS.PATIENTS}/user/${user.id}`);
-                if (response.success && response.patient) {
-                    setPatientId(response.patient.patient_id);
-                } else {
-                    console.error("Could not fetch patient profile for user:", user.id);
-                }
+            if (!userDataStr) { setLoading(false); return; }
+            const user = JSON.parse(userDataStr);
+            const response = await ApiHelper.get(`${ENDPOINTS.PATIENTS}/user/${user.id}`);
+            if (response.success && response.patient) {
+                setPatientId(response.patient.patient_id);
+                setLoading(false);
+                return;
             }
+            throw new Error('Profile response was not successful');
         } catch (error) {
-            console.error("Error fetching patient ID:", error);
-        } finally {
-            setLoading(false);
+            if (attempt < MAX_ATTEMPTS) {
+                setTimeout(() => fetchPatientId(attempt + 1), 1000 * (attempt + 1));
+            } else {
+                console.error("Could not load patient profile after retries:", error?.message);
+                setLoading(false);
+            }
         }
     };
 
