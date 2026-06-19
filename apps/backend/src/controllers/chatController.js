@@ -450,7 +450,7 @@ const handleAddMedication = async (patientId, userId, args) => {
             created_by: userId,
             medicine_name: medicine_name.trim(),
             dosage: (dosage || '').trim(),
-            form: '',
+            form: (form || '').trim(),
             instructions: (instructions || '').trim(),
         });
 
@@ -479,7 +479,8 @@ const handleAddMedication = async (patientId, userId, args) => {
         } catch (e) { /* non-fatal */ }
 
         const dosePart = (dosage || '').trim() ? ` ${dosage.trim()}` : "";
-        return `Done — I've added ${medicine_name.trim()}${dosePart} to your medications with a daily reminder at ${to12h(time24)}.${caretakerNote}`;
+        const formPart = (form || '').trim() ? ` (${form.trim()})` : "";
+        return `Done — I've added ${medicine_name.trim()}${dosePart}${formPart} to your medications with a daily reminder at ${to12h(time24)}.${caretakerNote}`;
     } catch (error) {
         console.error("Add Medication Error:", error);
         return "Sorry, I couldn't add the medication just now. Please try again.";
