@@ -23,6 +23,8 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
     const [loading, setLoading] = useState(true);
     const [modalVisible, setModalVisible] = useState(false);
     const [addMedModalVisible, setAddMedModalVisible] = useState(false);
+    const [savingMedication, setSavingMedication] = useState(false);
+    const [savingSchedule, setSavingSchedule] = useState(false);
     const [showTimePicker, setShowTimePicker] = useState(false);
     const [newMedication, setNewMedication] = useState({
         medicine_name: '',
@@ -97,6 +99,7 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
             return;
         }
 
+        setSavingSchedule(true);
         try {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             const payload = {
@@ -118,6 +121,8 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
         } catch (error) {
             console.error("Error adding schedule:", error);
             Alert.alert("Error", "Failed to add schedule.");
+        } finally {
+            setSavingSchedule(false);
         }
     };
 
@@ -175,6 +180,7 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
             return;
         }
 
+        setSavingMedication(true);
         try {
             const payload = {
                 patient_id: patientId,
@@ -188,6 +194,8 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
         } catch (error) {
             console.error("Error adding medication:", error);
             Alert.alert("Error", "Failed to add medication.");
+        } finally {
+            setSavingMedication(false);
         }
     };
 
@@ -408,11 +416,21 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
                     />
 
                     <View style={styles.modalButtons}>
-                        <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setAddMedModalVisible(false)}>
+                        <TouchableOpacity 
+                            style={[styles.modalButton, styles.cancelButton]} 
+                            onPress={() => setAddMedModalVisible(false)}
+                            disabled={savingMedication}
+                        >
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleAddMedication}>
-                            <Text style={styles.saveButtonText}>Save</Text>
+                        <TouchableOpacity 
+                            style={[styles.modalButton, styles.saveButton, savingMedication && { opacity: 0.6 }]} 
+                            onPress={handleAddMedication}
+                            disabled={savingMedication}
+                        >
+                            <Text style={styles.saveButtonText}>
+                                {savingMedication ? "Saving..." : "Save"}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -528,11 +546,21 @@ function MedicationManager({ patientId, title, restrictToOwn = false }) {
                     />
 
                     <View style={styles.modalButtons}>
-                        <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setAddScheduleModalVisible(false)}>
+                        <TouchableOpacity 
+                            style={[styles.modalButton, styles.cancelButton]} 
+                            onPress={() => setAddScheduleModalVisible(false)}
+                            disabled={savingSchedule}
+                        >
                             <Text style={styles.cancelButtonText}>Cancel</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.modalButton, styles.saveButton]} onPress={handleAddSchedule}>
-                            <Text style={styles.saveButtonText}>Save</Text>
+                        <TouchableOpacity 
+                            style={[styles.modalButton, styles.saveButton, savingSchedule && { opacity: 0.6 }]} 
+                            onPress={handleAddSchedule}
+                            disabled={savingSchedule}
+                        >
+                            <Text style={styles.saveButtonText}>
+                                {savingSchedule ? "Saving..." : "Save"}
+                            </Text>
                         </TouchableOpacity>
                     </View>
                 </View>
