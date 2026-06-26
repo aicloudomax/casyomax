@@ -23,9 +23,11 @@ const verifyToken = async (req, res, next) => {
             const currentSessionId = userRes.rows[0]?.session_id;
 
             if (!currentSessionId || currentSessionId !== decoded.sessionId) {
+                console.log(`[Session Expired Check] Mismatch for user ${decoded.id} on ${req.method} ${req.originalUrl}. Token Session: ${decoded.sessionId}, DB Session: ${currentSessionId}`);
                 return res.status(401).json({ msg: "Session expired: logged in on another device" });
             }
         } else if (decoded.id) {
+            console.log(`[Session Expired Check] Legacy token without sessionId for user ${decoded.id} on ${req.method} ${req.originalUrl}`);
             // Legacy token without sessionId - force relogin
             return res.status(401).json({ msg: "Session expired: please log in again" });
         }
