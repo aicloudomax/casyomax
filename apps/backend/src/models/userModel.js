@@ -103,6 +103,13 @@ exports.updatePushToken = async (userId, token) => {
   return result.rows[0];
 };
 
+exports.updateSessionId = async (userId, sessionId) => {
+  const query = "UPDATE users SET session_id = $1 WHERE id = $2 RETURNING *";
+  const values = [sessionId, userId];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+};
+
 // Save password reset OTP (expires in 10 minutes)
 exports.saveResetOTP = async (email, otp) => {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes

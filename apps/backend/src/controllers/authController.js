@@ -9,11 +9,12 @@
  * 3. Invite: Handles logic for generating/accepting invite links.
  */
 const jwt = require("jsonwebtoken");
-const { findUserByEmail, createUser } = require("../models/userModel");
+const { findUserByEmail, createUser, updateSessionId } = require("../models/userModel");
 const inviteModel = require("../models/inviteModel");
 const PatientModel = require("../models/patientModel");
 const subscriptionModel = require("../models/subscriptionModel");
 const bcrypt = require("bcryptjs");
+const { v4: uuidv4 } = require("uuid");
 
 
 // Register a new user
@@ -61,6 +62,9 @@ exports.register = async (req, res) => {
     await subscriptionModel.createSubscription(user.id);
 
     // 4. Generate Token (include plan from subscription)
+    const sessionId = uuidv4();
+    await updateSessionId(user.id, sessionId);
+
     const subscription = await subscriptionModel.getSubscription(user.id);
     const token = jwt.sign(
       {
@@ -68,6 +72,7 @@ exports.register = async (req, res) => {
         email: user.email,
         role: user.role,
         plan: subscription.plan,
+        sessionId: sessionId,
       },
       process.env.JWT_SECRET || "MY_SECRET_KEY",
       { expiresIn: "7d" }
@@ -119,6 +124,9 @@ exports.login = async (req, res) => {
     }
 
     // Generate JWT (include plan from subscription)
+    const sessionId = uuidv4();
+    await updateSessionId(user.id, sessionId);
+
     const subscription = await subscriptionModel.getSubscription(user.id);
     const token = jwt.sign(
       {
@@ -126,6 +134,7 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
         plan: subscription.plan,
+        sessionId: sessionId,
       },
       process.env.JWT_SECRET || "MY_SECRET_KEY",
       { expiresIn: "7d" }
