@@ -22,6 +22,17 @@ exports.registerToken = async (req, res) => {
     }
 };
 
+exports.unregisterToken = async (req, res) => {
+    try {
+        const userId = req.user.id; // From authMiddleware
+        await userModel.updatePushToken(userId, null);
+        res.status(200).json({ success: true, message: "Token unregistered successfully" });
+    } catch (error) {
+        console.error("Error unregistering token:", error);
+        res.status(500).json({ success: false, message: "Server error" });
+    }
+};
+
 exports.handleMedicationAction = async (req, res) => {
     try {
         const { logId, action } = req.body; // action: 'taken', 'missed', 'snooze'

@@ -6,6 +6,9 @@ const { verifyToken } = require("../middleware/authMiddleware");
 // Register push token
 router.post("/register-token", verifyToken, notificationController.registerToken);
 
+// Unregister push token
+router.post("/unregister-token", verifyToken, notificationController.unregisterToken);
+
 // Respond to medication notification
 router.post("/respond", verifyToken, notificationController.handleMedicationAction);
 

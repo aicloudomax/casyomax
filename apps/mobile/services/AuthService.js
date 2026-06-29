@@ -16,9 +16,15 @@ export const login = async (token, user) => {
 
 export const logoutUser = async () => {
     try {
+        // Unregister push token on backend before removing local credentials
+        try {
+            await ApiHelper.post('/notifications/unregister-token');
+        } catch (err) {
+            console.log("Failed to unregister push token on logout:", err);
+        }
+
         await SecureStore.deleteItemAsync('userToken');
         await SecureStore.deleteItemAsync('userData');
-        // Add any other cleanup here (e.g. unregister push tokens if needed)
 
         // Use replace to reset navigation history
         router.replace('/login');
