@@ -28,14 +28,22 @@ const Home = () => {
                 </div>
 
                 <div className="flex-1 flex justify-center w-full">
-                    {/* Placeholder for App Screenshot */}
-                    <div className="w-full max-w-md h-96 bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl shadow-2xl flex flex-col items-center justify-center text-primary relative overflow-hidden border border-blue-200">
-                        <Activity size={64} className="mb-4 text-primary opacity-80" />
-                        <span className="text-xl font-bold">Live Health Tracking</span>
-
-                        {/* Decorative circles */}
-                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-200 rounded-full opacity-50 blur-2xl"></div>
-                        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-purple-200 rounded-full opacity-50 blur-2xl"></div>
+                    {/* Visual showcasing the App Icon / Logo */}
+                    <div className="relative group">
+                        {/* Glow effect */}
+                        <div className="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
+                        
+                        <div className="relative w-72 h-72 md:w-80 md:h-80 bg-white rounded-3xl shadow-2xl p-6 flex flex-col items-center justify-center border border-gray-100">
+                            <img 
+                                src="/icon.jpg" 
+                                alt="Casyomax App Icon" 
+                                className="w-36 h-36 md:w-44 md:h-44 rounded-3xl shadow-md mb-6 object-cover transform hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="text-center">
+                                <span className="text-2xl font-bold text-gray-900 block mb-1">Casyomax</span>
+                                <span className="text-sm font-semibold text-gray-500 uppercase tracking-widest">Mobile Companion</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
